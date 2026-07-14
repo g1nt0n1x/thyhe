@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+.venv/
+
+# Environment variables
+.env
+
+# SQLite database (recreated on each run)
+thyhe.db
+
+# User uploads and auto-created document storage
+uploads/
+documents/files/
+
+# Logs
+*.log
+
+# Pentesting working files
+pentest/
+
+# Claude
+.claude/
