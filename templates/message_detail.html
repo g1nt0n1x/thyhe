@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Message - Thyhe{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <span><i class="bi bi-envelope-open"></i> {{ message['subject'] }}</span>
+                <a href="{{ url_for('messages') }}" class="btn btn-sm btn-outline-light">Back</a>
+            </div>
+            <div class="card-body">
+                <p><strong>From:</strong> {{ message['from_username'] }}</p>
+                <p><strong>Date:</strong> {{ message['created_at'] }}</p>
+                <hr>
+                <div>{{ message['body']|safe }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

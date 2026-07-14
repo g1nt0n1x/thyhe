@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Page View - Thyhe{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <span><i class="bi bi-file-code"></i> {{ page }}</span>
+                <a href="{{ url_for('documents') }}" class="btn btn-sm btn-outline-light">Back</a>
+            </div>
+            <div class="card-body">
+                <pre>{{ content }}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

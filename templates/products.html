@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Products - Thyhe{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-box-seam"></i> Product Catalog</h2>
+    <form class="d-flex" action="{{ url_for('product_search') }}" method="GET">
+        <input type="text" class="form-control me-2" name="q" placeholder="Search products...">
+        <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+</div>
+
+<div class="mb-3">
+    <strong>Filter by category:</strong>
+    <a href="{{ url_for('product_filter', category='Security') }}" class="btn btn-sm btn-outline-info">Security</a>
+    <a href="{{ url_for('product_filter', category='Networking') }}" class="btn btn-sm btn-outline-info">Networking</a>
+    <a href="{{ url_for('product_filter', category='Storage') }}" class="btn btn-sm btn-outline-info">Storage</a>
+    <a href="{{ url_for('product_filter', category='Cloud') }}" class="btn btn-sm btn-outline-info">Cloud</a>
+    <a href="{{ url_for('product_filter', category='Monitoring') }}" class="btn btn-sm btn-outline-info">Monitoring</a>
+    <a href="{{ url_for('products') }}" class="btn btn-sm btn-outline-secondary">All</a>
+</div>
+
+<div class="row">
+    {% for p in products %}
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">{{ p['name'] }}</h5>
+                <p class="card-text text-muted">{{ p['description'][:100] }}...</p>
+                <p class="h5 text-success">${{ "%.2f"|format(p['price']) }}</p>
+                <span class="badge bg-secondary">{{ p['category'] }}</span>
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('product_detail', product_id=p['id']) }}" class="btn btn-sm btn-outline-info">Details & Reviews</a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

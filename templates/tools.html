@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Internal Tools - Thyhe{% endblock %}
+{% block content %}
+<h2 class="mb-4"><i class="bi bi-tools"></i> Internal Tools</h2>
+
+<div class="row">
+    <div class="col-md-4 mb-3">
+        <a href="{{ url_for('tools_ping') }}" class="text-decoration-none">
+            <div class="card tool-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-reception-4 display-4 text-info"></i>
+                    <h5 class="mt-2">Ping Test</h5>
+                    <p class="text-muted small">Check host availability</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4 mb-3">
+        <a href="{{ url_for('tools_dns') }}" class="text-decoration-none">
+            <div class="card tool-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-globe display-4 text-info"></i>
+                    <h5 class="mt-2">DNS Lookup</h5>
+                    <p class="text-muted small">Resolve domain names</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4 mb-3">
+        <a href="{{ url_for('tools_traceroute') }}" class="text-decoration-none">
+            <div class="card tool-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-diagram-3 display-4 text-info"></i>
+                    <h5 class="mt-2">Traceroute</h5>
+                    <p class="text-muted small">Trace network path</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4 mb-3">
+        <a href="{{ url_for('tools_urlcheck') }}" class="text-decoration-none">
+            <div class="card tool-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-link-45deg display-4 text-warning"></i>
+                    <h5 class="mt-2">URL Checker</h5>
+                    <p class="text-muted small">Verify URL status</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4 mb-3">
+        <a href="{{ url_for('tools_webhook') }}" class="text-decoration-none">
+            <div class="card tool-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-broadcast display-4 text-warning"></i>
+                    <h5 class="mt-2">Webhook Tester</h5>
+                    <p class="text-muted small">Test webhook delivery</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-4 mb-3">
+        <a href="{{ url_for('tools_compare') }}" class="text-decoration-none">
+            <div class="card tool-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-arrow-left-right display-4 text-warning"></i>
+                    <h5 class="mt-2">Vendor Compare</h5>
+                    <p class="text-muted small">Compare vendor pricing</p>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+{% endblock %}

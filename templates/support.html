@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Support - Thyhe{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-headset"></i> Support Tickets</h2>
+    <div>
+        <form class="d-inline" action="{{ url_for('support_search') }}" method="GET">
+            <div class="input-group">
+                <input type="text" class="form-control" name="q" placeholder="Search tickets..." value="{{ search|default('') }}">
+                <button type="submit" class="btn btn-outline-info">Search</button>
+            </div>
+        </form>
+        <a href="{{ url_for('support_create') }}" class="btn btn-primary ms-2"><i class="bi bi-plus"></i> New Ticket</a>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-dark table-hover">
+        <thead>
+            <tr><th>#</th><th>Title</th><th>Author</th><th>Priority</th><th>Status</th><th>Date</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+            {% for t in tickets %}
+            <tr>
+                <td>{{ t['id'] }}</td>
+                <td>{{ t['title']|safe }}</td>
+                <td>{{ t['username'] }}</td>
+                <td><span class="badge bg-{{ 'danger' if t['priority'] == 'critical' else 'warning' if t['priority'] == 'high' else 'info' }}">{{ t['priority'] }}</span></td>
+                <td><span class="badge bg-{{ 'success' if t['status'] == 'closed' else 'primary' }}">{{ t['status'] }}</span></td>
+                <td>{{ t['created_at'] }}</td>
+                <td><a href="{{ url_for('support_ticket', ticket_id=t['id']) }}" class="btn btn-sm btn-outline-info">View</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header"><i class="bi bi-paperclip"></i> Upload Attachment</div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('support_attach') }}" enctype="multipart/form-data">
+            <div class="input-group">
+                <input type="file" class="form-control" name="attachment">
+                <button type="submit" class="btn btn-primary">Upload</button>
+            </div>
+            <small class="text-muted">Blocked extensions: .php, .exe, .sh, .bat, .cmd</small>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Messages - Thyhe{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-envelope"></i> Messages</h2>
+    <a href="{{ url_for('message_send') }}" class="btn btn-primary"><i class="bi bi-pencil"></i> Compose</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% for m in messages %}
+        <div class="d-flex justify-content-between align-items-center border-bottom border-secondary py-2">
+            <div>
+                <strong>{{ m['from_username'] }}</strong>
+                <a href="{{ url_for('message_detail', msg_id=m['id']) }}">{{ m['subject'] }}</a>
+            </div>
+            <small class="text-muted">{{ m['created_at'] }}</small>
+        </div>
+        {% endfor %}
+        {% if not messages %}
+        <p class="text-muted">No messages.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

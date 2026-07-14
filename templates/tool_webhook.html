@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Webhook Tester - Thyhe{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-broadcast"></i> Webhook Tester</div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Webhook URL</label>
+                        <input type="text" class="form-control" name="webhook_url" placeholder="https://webhook.site/your-id">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Payload (JSON)</label>
+                        <textarea class="form-control" name="payload" rows="4">{"event": "test", "timestamp": "2024-01-01"}</textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Send Webhook</button>
+                </form>
+                {% if message %}
+                <div class="alert alert-info mt-3">{{ message }}</div>
+                {% endif %}
+            </div>
+        </div>
+        <a href="{{ url_for('tools') }}" class="btn btn-outline-light mt-3">Back to Tools</a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Custom Greeting - Thyhe{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-chat-heart"></i> Greeting Preview</div>
+            <div class="card-body">
+                {% if result %}
+                <div class="alert alert-info">
+                    <strong>Preview:</strong><br>
+                    {{ result|safe }}
+                </div>
+                {% endif %}
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Greeting Template</label>
+                        <input type="text" class="form-control" name="greeting" placeholder="Hello! Welcome to Thyhe.">
+                        <small class="text-muted">Supports template variables.</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Preview</button>
+                    <a href="{{ url_for('profile') }}" class="btn btn-outline-secondary">Back to Profile</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}XML Import - Thyhe{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-filetype-xml"></i> Import XML Data</div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Paste XML Data</label>
+                        <textarea class="form-control" name="xml_data" rows="10" placeholder='<?xml version="1.0"?>
+<report>
+  <title>Monthly Report</title>
+  <author>John Smith</author>
+  <data>Report content here</data>
+</report>'></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Parse XML</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-upload"></i> Upload XML File</div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('report_upload_xml') }}" enctype="multipart/form-data">
+                    <div class="input-group">
+                        <input type="file" class="form-control" name="xmlfile" accept=".xml">
+                        <button type="submit" class="btn btn-primary">Upload & Parse</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if result %}
+        <div class="card">
+            <div class="card-header"><i class="bi bi-code-slash"></i> Parsed Result</div>
+            <div class="card-body">
+                <pre>{{ result }}</pre>
+            </div>
+        </div>
+        {% endif %}
+
+        <a href="{{ url_for('reports') }}" class="btn btn-outline-light mt-3">Back to Reports</a>
+    </div>
+</div>
+{% endblock %}

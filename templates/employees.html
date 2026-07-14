@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Employee Directory - Thyhe{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-people"></i> Employee Directory</h2>
+    <form class="d-flex" action="{{ url_for('employee_search') }}" method="GET">
+        <input type="text" class="form-control me-2" name="q" placeholder="Search employees..." value="{{ search|default('') }}">
+        <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+</div>
+
+{% if search is defined and search %}
+<div class="alert alert-info">Search results for: <strong>{{ search }}</strong></div>
+{% endif %}
+
+<div class="table-responsive">
+    <table class="table table-dark table-hover">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Username</th>
+                <th>Position</th>
+                <th>Email</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for emp in employees %}
+            <tr>
+                <td>{{ emp['id'] }}</td>
+                <td>{{ emp['first_name'] }} {{ emp['last_name'] }}</td>
+                <td>{{ emp['username'] }}</td>
+                <td>{{ emp['position'] }}</td>
+                <td>{{ emp['email'] }}</td>
+                <td><a href="{{ url_for('employee_detail', emp_id=emp['id']) }}" class="btn btn-sm btn-outline-info">View</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

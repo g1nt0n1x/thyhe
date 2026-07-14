@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Error - Thyhe{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-6 mx-auto text-center mt-5">
+        <i class="bi bi-exclamation-triangle display-1 text-danger"></i>
+        <h2 class="mt-3">Error</h2>
+        <div class="alert alert-danger mt-3">{{ message|safe }}</div>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary">Go to Dashboard</a>
+    </div>
+</div>
+{% endblock %}

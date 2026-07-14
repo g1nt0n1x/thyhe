@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Email Preview - Thyhe{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-envelope"></i> Email Template Preview</div>
+            <div class="card-body">
+                <p class="text-muted">Preview how your email template will render before sending.</p>
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Subject</label>
+                        <input type="text" class="form-control" name="subject" placeholder="Weekly Status Update">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Body</label>
+                        <textarea class="form-control" name="body" rows="6" placeholder="Hi team, here's the weekly update..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Preview Email</button>
+                </form>
+                {% if result %}
+                <hr>
+                <h5>Email Preview:</h5>
+                <div class="border p-3 rounded" style="background-color:#fff; color:#333;">
+                    {{ result|safe }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        <a href="{{ url_for('reports') }}" class="btn btn-outline-light mt-3">Back to Reports</a>
+    </div>
+</div>
+{% endblock %}

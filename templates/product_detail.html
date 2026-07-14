@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{{ product['name'] }} - Thyhe{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card mb-3">
+            <div class="card-header">
+                <a href="{{ url_for('products') }}" class="text-info">&laquo; Back to Products</a>
+            </div>
+            <div class="card-body">
+                <h3>{{ product['name'] }}</h3>
+                <p>{{ product['description'] }}</p>
+                <p class="h4 text-success">${{ "%.2f"|format(product['price']) }}</p>
+                <span class="badge bg-secondary">{{ product['category'] }}</span>
+                <span class="badge bg-info">{{ product['stock'] }} in stock</span>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-chat-dots"></i> Reviews</div>
+            <div class="card-body">
+                {% for r in reviews %}
+                <div class="border-bottom border-secondary pb-2 mb-2">
+                    <strong>{{ r['username'] }}</strong>
+                    <span class="text-warning">{{ '★' * r['rating'] }}{{ '☆' * (5 - r['rating']) }}</span>
+                    <small class="text-muted">{{ r['created_at'] }}</small>
+                    <p class="mb-0 mt-1">{{ r['content']|safe }}</p>
+                </div>
+                {% endfor %}
+                {% if not reviews %}
+                <p class="text-muted">No reviews yet.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><i class="bi bi-pencil"></i> Write a Review</div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('product_review', product_id=product['id']) }}">
+                    <div class="mb-3">
+                        <label class="form-label">Rating</label>
+                        <select class="form-select" name="rating">
+                            <option value="5">★★★★★ Excellent</option>
+                            <option value="4">★★★★☆ Good</option>
+                            <option value="3">★★★☆☆ Average</option>
+                            <option value="2">★★☆☆☆ Poor</option>
+                            <option value="1">★☆☆☆☆ Terrible</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Review</label>
+                        <textarea class="form-control" name="content" rows="3" placeholder="Write your review..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Submit Review</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

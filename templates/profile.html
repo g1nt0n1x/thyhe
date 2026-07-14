@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Profile - Thyhe{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <span><i class="bi bi-person"></i> User Profile</span>
+                <a href="{{ url_for('profile_edit') }}" class="btn btn-sm btn-outline-warning">Edit Profile</a>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 text-center">
+                        <img src="{{ url_for('uploaded_file', filename=profile_user['avatar']) if profile_user['avatar'] != 'default.png' else 'https://via.placeholder.com/150?text=' + profile_user['username'] }}" class="rounded-circle mb-3" width="120" height="120" alt="Avatar">
+                    </div>
+                    <div class="col-md-9">
+                        <h4>{{ profile_user['username'] }}</h4>
+                        <p><strong>Email:</strong> {{ profile_user['email'] }}</p>
+                        <p><strong>Role:</strong> <span class="badge bg-info">{{ profile_user['role'] }}</span></p>
+                        <p><strong>Department:</strong> {{ profile_user['department'] }}</p>
+                        <p><strong>Member since:</strong> {{ profile_user['created_at'] }}</p>
+                    </div>
+                </div>
+                {% if profile_user['bio'] %}
+                <hr>
+                <h5>About Me</h5>
+                <div class="p-3 rounded" style="background-color:#1e2a3a;">{{ profile_user['bio']|safe }}</div>
+                {% endif %}
+
+                <hr>
+                <h5>Recent Activity</h5>
+                {% if activities %}
+                <ul class="list-group list-group-flush">
+                    {% for a in activities %}
+                    <li class="list-group-item bg-transparent text-light">Ticket: {{ a['title'] }} ({{ a['status'] }})</li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted">No recent activity.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header"><i class="bi bi-chat-heart"></i> Custom Greeting</div>
+            <div class="card-body">
+                <form action="{{ url_for('profile_greeting') }}" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Create a custom greeting template</label>
+                        <input type="text" class="form-control" name="greeting" placeholder="Hello {{ '{{' }}username{{ '}}' }}! Welcome to Thyhe.">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Preview Greeting</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

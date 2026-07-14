@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Report Generator - Thyhe{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-file-earmark-code"></i> Template Report Generator</div>
+            <div class="card-body">
+                <p class="text-muted">Enter a report template using Jinja2 syntax. Variables are auto-populated.</p>
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Report Template</label>
+                        <textarea class="form-control" name="template" rows="8" placeholder="Report generated on {{ '{{' }} date {{ '}}' }}
+Total revenue: ${{ '{{' }} revenue {{ '}}' }}
+Author: {{ '{{' }} author {{ '}}' }}"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Generate Report</button>
+                </form>
+                {% if result %}
+                <hr>
+                <h5>Generated Report:</h5>
+                <div class="p-3 rounded" style="background-color:#1e2a3a;">{{ result|safe }}</div>
+                {% endif %}
+            </div>
+        </div>
+        <a href="{{ url_for('reports') }}" class="btn btn-outline-light mt-3">Back to Reports</a>
+    </div>
+</div>
+{% endblock %}

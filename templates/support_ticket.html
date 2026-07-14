@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Ticket #{{ ticket['id'] }} - Thyhe{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between">
+                <span><i class="bi bi-ticket"></i> Ticket #{{ ticket['id'] }}</span>
+                <a href="{{ url_for('support') }}" class="btn btn-sm btn-outline-light">Back</a>
+            </div>
+            <div class="card-body">
+                <h4>{{ ticket['title']|safe }}</h4>
+                <p><strong>Author:</strong> {{ ticket['username'] }} | <strong>Priority:</strong> <span class="badge bg-warning">{{ ticket['priority'] }}</span> | <strong>Status:</strong> <span class="badge bg-info">{{ ticket['status'] }}</span></p>
+                <hr>
+                <div>{{ ticket['content']|safe }}</div>
+                <small class="text-muted">Created: {{ ticket['created_at'] }}</small>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-chat-left-text"></i> Replies</div>
+            <div class="card-body">
+                {% for r in replies %}
+                <div class="border-bottom border-secondary pb-2 mb-2">
+                    <strong>{{ r['username'] }}</strong> <small class="text-muted">{{ r['created_at'] }}</small>
+                    <p class="mb-0">{{ r['content']|safe }}</p>
+                </div>
+                {% endfor %}
+                {% if not replies %}
+                <p class="text-muted">No replies yet.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><i class="bi bi-reply"></i> Add Reply</div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('ticket_reply', ticket_id=ticket['id']) }}">
+                    <div class="mb-3">
+                        <textarea class="form-control" name="content" rows="3" placeholder="Type your reply..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Submit Reply</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

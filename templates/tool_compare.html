@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Vendor Compare - Thyhe{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-arrow-left-right"></i> Vendor Price Comparison</div>
+            <div class="card-body">
+                <p class="text-muted">Enter a vendor API URL to fetch pricing data for comparison.</p>
+                <form method="POST">
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" name="vendor_url" placeholder="http://vendor-api.example.com/prices">
+                        <button type="submit" class="btn btn-primary">Fetch Prices</button>
+                    </div>
+                </form>
+                {% if result %}
+                <h5>Vendor Response:</h5>
+                <pre>{{ result }}</pre>
+                {% endif %}
+            </div>
+        </div>
+        <a href="{{ url_for('tools') }}" class="btn btn-outline-light mt-3">Back to Tools</a>
+    </div>
+</div>
+{% endblock %}

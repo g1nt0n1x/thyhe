@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Admin Panel - Thyhe{% endblock %}
+{% block content %}
+<h2 class="mb-4"><i class="bi bi-gear"></i> Admin Panel</h2>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="stat-card text-center">
+            <div class="stat-number">{{ stats['total_users'] }}</div>
+            <div class="text-muted">Total Users</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card text-center">
+            <div class="stat-number">{{ stats['total_tickets'] }}</div>
+            <div class="text-muted">Support Tickets</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card text-center">
+            <div class="stat-number">{{ stats['total_products'] }}</div>
+            <div class="text-muted">Products</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><i class="bi bi-people"></i> User Management</div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover">
+                <thead>
+                    <tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Department</th><th>Locked</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr>
+                        <td>{{ u['id'] }}</td>
+                        <td>{{ u['username'] }}</td>
+                        <td>{{ u['email'] }}</td>
+                        <td><span class="badge bg-{{ 'danger' if u['role'] == 'admin' else 'warning' if u['role'] == 'manager' else 'info' }}">{{ u['role'] }}</span></td>
+                        <td>{{ u['department'] }}</td>
+                        <td>{{ '🔒' if u['locked'] else '✓' }}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('admin_update_role') }}" class="d-inline">
+                                <input type="hidden" name="user_id" value="{{ u['id'] }}">
+                                <select name="role" class="form-select form-select-sm d-inline" style="width:auto;">
+                                    <option value="employee">employee</option>
+                                    <option value="manager">manager</option>
+                                    <option value="hr">hr</option>
+                                    <option value="admin">admin</option>
+                                </select>
+                                <button type="submit" class="btn btn-sm btn-outline-warning">Update</button>
+                            </form>
+                            <form method="POST" action="{{ url_for('admin_delete_user', user_id=u['id']) }}" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete user?')">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

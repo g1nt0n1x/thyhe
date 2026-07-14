@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Traceroute - Thyhe{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-diagram-3"></i> Traceroute</div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" name="host" placeholder="Enter hostname or IP">
+                        <button type="submit" class="btn btn-primary">Trace</button>
+                    </div>
+                </form>
+                {% if message %}
+                <div class="alert alert-info">{{ message }}</div>
+                {% endif %}
+                <p class="text-muted small">Note: Traceroute runs in the background. Results will be emailed to your corporate address.</p>
+            </div>
+        </div>
+        <a href="{{ url_for('tools') }}" class="btn btn-outline-light mt-3">Back to Tools</a>
+    </div>
+</div>
+{% endblock %}

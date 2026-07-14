@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Employee #{{ emp['id'] }} - Thyhe{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <span><i class="bi bi-person-badge"></i> Employee Record #{{ emp['id'] }}</span>
+                <a href="{{ url_for('employees') }}" class="btn btn-sm btn-outline-light">Back</a>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Name:</strong> {{ emp['first_name'] }} {{ emp['last_name'] }}</p>
+                        <p><strong>Username:</strong> {{ emp['username'] }}</p>
+                        <p><strong>Email:</strong> {{ emp['email'] }}</p>
+                        <p><strong>Position:</strong> {{ emp['position'] }}</p>
+                        <p><strong>Role:</strong> <span class="badge bg-info">{{ emp['role'] }}</span></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Salary:</strong> ${{ "%.2f"|format(emp['salary']) }}</p>
+                        <p><strong>SSN:</strong> {{ emp['ssn'] }}</p>
+                        <p><strong>Phone:</strong> {{ emp['phone'] }}</p>
+                        <p><strong>Address:</strong> {{ emp['address'] }}</p>
+                    </div>
+                </div>
+                {% if emp['bio'] %}
+                <hr>
+                <h5>Bio</h5>
+                <div>{{ emp['bio']|safe }}</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

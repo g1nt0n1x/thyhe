@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Product Search - Thyhe{% endblock %}
+{% block content %}
+<h2><i class="bi bi-search"></i> Product Search</h2>
+
+<form class="mb-4" action="{{ url_for('product_search') }}" method="GET">
+    <div class="input-group">
+        <input type="text" class="form-control" name="q" value="{{ query }}" placeholder="Search products...">
+        <button type="submit" class="btn btn-primary">Search</button>
+    </div>
+</form>
+
+{% if query %}
+<div class="alert alert-info">
+    Search results for: <strong>{{ query|safe }}</strong>
+</div>
+{% endif %}
+
+{% if products %}
+<div class="table-responsive">
+    <table class="table table-dark table-hover">
+        <thead>
+            <tr><th>ID</th><th>Name</th><th>Description</th><th>Price</th><th>Category</th></tr>
+        </thead>
+        <tbody>
+            {% for p in products %}
+            <tr>
+                <td>{{ p[0] }}</td>
+                <td>{{ p[1] }}</td>
+                <td>{{ p[2] }}</td>
+                <td>${{ p[3] }}</td>
+                <td>{{ p[4] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% elif query %}
+<p class="text-muted">No products found.</p>
+{% endif %}
+{% endblock %}

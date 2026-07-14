@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Documents - Thyhe{% endblock %}
+{% block content %}
+<h2 class="mb-4"><i class="bi bi-folder2-open"></i> Document Manager</h2>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-file-earmark-text"></i> Company Documents</div>
+            <div class="card-body">
+                {% for f in files %}
+                <div class="d-flex justify-content-between align-items-center border-bottom border-secondary py-2">
+                    <span><i class="bi bi-file-text"></i> {{ f }}</span>
+                    <a href="{{ url_for('document_view', file=f) }}" class="btn btn-sm btn-outline-info">View</a>
+                </div>
+                {% endfor %}
+                {% if not files %}
+                <p class="text-muted">No documents available.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><i class="bi bi-file-earmark-code"></i> Page Viewer</div>
+            <div class="card-body">
+                <form action="{{ url_for('pages') }}" method="GET">
+                    <div class="input-group">
+                        <input type="text" class="form-control" name="page" placeholder="Enter page name...">
+                        <button type="submit" class="btn btn-primary">Load Page</button>
+                    </div>
+                </form>
+                <hr>
+                <form action="{{ url_for('resources') }}" method="GET">
+                    <div class="input-group">
+                        <input type="text" class="form-control" name="src" placeholder="Enter resource URL or path...">
+                        <button type="submit" class="btn btn-primary">Load Resource</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-cloud-upload"></i> Upload Document</div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('document_upload') }}" enctype="multipart/form-data" id="upload-form">
+                    <div class="mb-3">
+                        <input type="file" class="form-control" name="file" id="file-input" accept=".pdf,.doc,.docx,.txt,.csv,.xlsx">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Upload</button>
+                </form>
+                <small class="text-muted">Allowed: PDF, DOC, DOCX, TXT, CSV, XLSX</small>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><i class="bi bi-file-earmark"></i> My Uploads</div>
+            <div class="card-body">
+                {% for d in docs %}
+                <div class="d-flex justify-content-between align-items-center border-bottom border-secondary py-2">
+                    <span><i class="bi bi-file-earmark"></i> {{ d['original_name'] }}</span>
+                    <a href="{{ url_for('uploaded_file', filename=d['filename']) }}" class="btn btn-sm btn-outline-info">Download</a>
+                </div>
+                {% endfor %}
+                {% if not docs %}
+                <p class="text-muted">No uploads yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+// VULN: Client-side only validation - easily bypassed
+document.getElementById('upload-form').addEventListener('submit', function(e) {
+    var fileInput = document.getElementById('file-input');
+    var allowed = ['pdf', 'doc', 'docx', 'txt', 'csv', 'xlsx'];
+    var ext = fileInput.value.split('.').pop().toLowerCase();
+    if (allowed.indexOf(ext) === -1) {
+        e.preventDefault();
+        alert('Only PDF, DOC, DOCX, TXT, CSV, XLSX files are allowed!');
+    }
+});
+</script>
+{% endblock %}
+{% endblock %}
