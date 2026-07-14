@@ -79,7 +79,7 @@ No external services or databases are required. Everything runs locally.
 ## Installation
 
 ```bash
-git clone <repo-url>
+https://github.com/g1nt0n1x/thyhe.git
 cd thyhe
 pip install -r requirements.txt
 python3 app.py
